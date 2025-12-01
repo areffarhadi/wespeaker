@@ -39,14 +39,21 @@ class Speaker:
 
     def __init__(self, model_dir: str):
         set_seed()
-        self.model = load_model_pt(model_dir)
+
+        config_path = os.path.join(model_dir, 'config.yaml')
+        model_path = os.path.join(model_dir, 'avg_model.pt')
+        with open(config_path, 'r') as fin:
+            configs = yaml.load(fin, Loader=yaml.FullLoader)
+        self.model = get_speaker_model(
+            configs['model'])(**configs['model_args'])
+        load_checkpoint(self.model, model_path)
+        self.model.eval()
         self.vad = load_silero_vad()
         self.table = {}
         self.resample_rate = 16000
         self.apply_vad = False
         self.device = torch.device('cpu')
         self.wavform_norm = False
-        self.window_type = 'hamming'
 
         # diarization parmas
         self.diar_min_duration = 0.255
@@ -58,9 +65,6 @@ class Speaker:
 
     def set_wavform_norm(self, wavform_norm: bool):
         self.wavform_norm = wavform_norm
-
-    def set_window_type(self, window_type: str):
-        self.window_type = window_type
 
     def set_resample_rate(self, resample_rate: int):
         self.resample_rate = resample_rate
@@ -98,7 +102,7 @@ class Speaker:
                            frame_length=frame_length,
                            frame_shift=frame_shift,
                            sample_frequency=sample_rate,
-                           window_type=self.window_type)
+                           window_type='hamming')
         if cmn:
             feat = feat - torch.mean(feat, 0)
         return feat
@@ -219,8 +223,7 @@ class Speaker:
         vad_segments = get_speech_timestamps(wav,
                                              self.vad,
                                              return_seconds=True)
-        if not vad_segments:
-            return []
+
         # 2. extact fbanks
         subsegs, subseg_fbanks = [], []
         window_fs = int(self.diar_window_secs * 1000) // self.diar_frame_shift
@@ -289,37 +292,13 @@ class Speaker:
                            float(end) - float(begin), label))
 
 
-def load_or_download(model_name_or_path: str):
-    if model_name_or_path in Hub.Assets:
-        model_dir = Hub.get_model(model_name_or_path)
-    else:
-        model_dir = model_name_or_path
-    return model_dir
+def load_model(language: str) -> Speaker:
+    model_path = Hub.get_model(language)
+    return Speaker(model_path)
 
 
-def load_model(model_name_or_path: str) -> Speaker:
-    return Speaker(load_or_download(model_name_or_path))
-
-
-# Load the pytorch pt model which contains all the details.
-# And we can use the pt model as a third party pytorch nn.Module for training
-def load_model_pt(model_name_or_path: str):
-    """There are the following files in the `model_dir`:
-       - config.yaml: the model config file
-       - avg_model.pt: the pytorch model file
-    """
-    model_dir = load_or_download(model_name_or_path)
-    required_files = ['config.yaml', 'avg_model.pt']
-    for file in required_files:
-        if not os.path.exists(os.path.join(model_dir, file)):
-            raise FileNotFoundError(f"{file} not found in {model_dir}")
-    # Read config file
-    with open(os.path.join(model_dir, 'config.yaml'), 'r') as f:
-        config = yaml.load(f, Loader=yaml.FullLoader)
-    model = get_speaker_model(config['model'])(**config['model_args'])
-    load_checkpoint(model, os.path.join(model_dir, 'avg_model.pt'))
-    model.eval()
-    return model
+def load_model_local(model_dir: str) -> Speaker:
+    return Speaker(model_dir)
 
 
 def main():
@@ -328,11 +307,9 @@ def main():
         if args.campplus:
             model = load_model("campplus")
             model.set_wavform_norm(True)
-            model.set_window_type('povey')
         elif args.eres2net:
             model = load_model("eres2net")
             model.set_wavform_norm(True)
-            model.set_window_type('povey')
         elif args.vblinkp:
             model = load_model("vblinkp")
         elif args.vblinkf:
@@ -340,7 +317,7 @@ def main():
         else:
             model = load_model(args.language)
     else:
-        model = load_model(model_dir=args.pretrain)
+        model = load_model_local(args.pretrain)
     model.set_resample_rate(args.resample_rate)
     model.set_vad(args.vad)
     model.set_device(args.device)

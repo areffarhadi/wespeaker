@@ -1,6 +1,7 @@
 # Copyright (c) 2024 XiaoyiQin, Yuke Lin (linyuke0609@gmail.com)
 #               2024 Shuai Wang (wsstriving@gmail.com)
-#
+#   AREF added SimAM_ResNet293_ASP 16th July 2025
+
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -40,6 +41,7 @@ class SimAMBasicBlock(nn.Module):
         self.bn2 = NormLayer(planes)
         self.relu = nn.ReLU(inplace=True)
         self.sigmoid = nn.Sigmoid()
+        self.lambda_p = torch.tensor(1e-4)  # Added as class attribute
 
         self.downsample = nn.Sequential()
         if stride != 1 or in_planes != self.expansion * planes:
@@ -62,11 +64,11 @@ class SimAMBasicBlock(nn.Module):
         out = self.relu(out)
         return out
 
-    def SimAM(self, X, lambda_p=1e-4):
+    def SimAM(self, X):
         n = X.shape[2] * X.shape[3] - 1
         d = (X - X.mean(dim=[2, 3], keepdim=True)).pow(2)
         v = d.sum(dim=[2, 3], keepdim=True) / n
-        E_inv = d / (4 * (v + lambda_p)) + 0.5
+        E_inv = d / (4 * (v + self.lambda_p)) + 0.5
         return X * self.sigmoid(E_inv)
 
 
@@ -132,36 +134,61 @@ def SimAM_ResNet100(in_planes):
 
 
 class SimAM_ResNet34_ASP(nn.Module):
-    def __init__(self, in_planes=64, embed_dim=256, acoustic_dim=80, dropout=0):
+    def __init__(self, in_planes=64, embed_dim=256, acoustic_dim=80, dropout=0.0):
         super(SimAM_ResNet34_ASP, self).__init__()
         self.front = SimAM_ResNet34(in_planes)
         self.pooling = pooling_layers.ASP(in_planes, acoustic_dim)
         self.bottleneck = nn.Linear(self.pooling.out_dim, embed_dim)
-        self.drop = nn.Dropout(dropout) if dropout else None
+        self.drop = nn.Dropout(p=float(dropout))
+        self.use_dropout = dropout > 0.0
 
     def forward(self, x):
         x = x.permute(0, 2, 1)
         x = self.front(x.unsqueeze(dim=1))
         x = self.pooling(x)
-        if self.drop:
+        if self.use_dropout:
             x = self.drop(x)
         x = self.bottleneck(x)
         return x
 
 
 class SimAM_ResNet100_ASP(nn.Module):
-    def __init__(self, in_planes=64, embed_dim=256, acoustic_dim=80, dropout=0):
+    def __init__(self, in_planes=64, embed_dim=256, acoustic_dim=80, dropout=0.0):
         super(SimAM_ResNet100_ASP, self).__init__()
         self.front = SimAM_ResNet100(in_planes)
         self.pooling = pooling_layers.ASP(in_planes, acoustic_dim)
         self.bottleneck = nn.Linear(self.pooling.out_dim, embed_dim)
-        self.drop = nn.Dropout(dropout) if dropout else None
+        self.drop = nn.Dropout(p=float(dropout))
+        self.use_dropout = dropout > 0.0
 
     def forward(self, x):
         x = x.permute(0, 2, 1)
         x = self.front(x.unsqueeze(dim=1))
         x = self.pooling(x)
-        if self.drop:
+        if self.use_dropout:
+            x = self.drop(x)
+        x = self.bottleneck(x)
+        return x
+
+
+def SimAM_ResNet293(in_planes):
+    return ResNet(in_planes, SimAMBasicBlock, [10, 20, 64, 3])
+
+
+class SimAM_ResNet293_ASP(nn.Module):
+    def __init__(self, in_planes=64, embed_dim=256, acoustic_dim=80, dropout=0.0):
+        super(SimAM_ResNet293_ASP, self).__init__()
+        self.front = SimAM_ResNet293(in_planes)
+        self.pooling = pooling_layers.ASP(in_planes, acoustic_dim)
+        self.bottleneck = nn.Linear(self.pooling.out_dim, embed_dim)
+        self.drop = nn.Dropout(p=float(dropout))
+        self.use_dropout = dropout > 0.0
+
+    def forward(self, x):
+        x = x.permute(0, 2, 1)
+        x = self.front(x.unsqueeze(dim=1))
+        x = self.pooling(x)
+        if self.use_dropout:
             x = self.drop(x)
         x = self.bottleneck(x)
         return x
@@ -176,3 +203,4 @@ if __name__ == '__main__':
 
     num_params = sum(p.numel() for p in model.parameters())
     print("{} M".format(num_params / 1e6))
+
