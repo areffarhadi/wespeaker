@@ -39,7 +39,7 @@ These results demonstrate the baseline's capability to handle cross-lingual spea
 
 1. Get your API key from: [https://datacollective.mozillafoundation.org/api-reference](https://datacollective.mozillafoundation.org/api-reference)
 
-2. Edit `run_vox_custom_paak.sh` and set your API key:
+2. Edit `run.sh` and set your API key:
 
 ```bash
 # CommonVoice DataCollective API Key
@@ -71,11 +71,97 @@ pip install datacollective
 
 This package is required for automatic dataset download via the DataCollective API.
 
+#### (Optional but Recommended) Install Hugging Face Hub
+
+If you want the **baseline pretrained model** to be downloaded automatically, install:
+
+```bash
+pip install huggingface_hub
+```
+
+Otherwise, you can download the model manually from Hugging Face (see below).
+
+---
+
+### 3. Download the Baseline Pretrained Model
+
+The official baseline model checkpoint for this recipe is hosted on Hugging Face:
+
+- **Model page**: `https://huggingface.co/areffarhadi/Resnet34-tidyvoiceX-ASV`
+
+You have **two options** to get the model:
+
+#### Option A: Automatic download (dataset + model)
+
+Use the provided downloader script, which will:
+- Download the **TidyVoiceX dataset** from Mozilla DataCollective
+- Download the **baseline pretrained model** from Hugging Face and place it in the expected directory
+
+```bash
+cd examples/tidyvocie
+
+# <DATA_ROOT> is where you want the TidyVoiceX data to be stored
+python local/download_tidyvoice.py <DATA_ROOT> <TIDYVOICE_API_KEY>
+```
+
+This will:
+- Save the dataset into `<DATA_ROOT>`
+- Save the model files (`avg_model.pt` and `config.yaml`) into:
+
+```text
+exp/samresnet34_voxblink_ft_tidy/models
+```
+
+> **Note**: For the automatic Hugging Face download to work, you must have `huggingface_hub` installed.
+
+After downloading the model, you need to:
+
+1. **Prepare the data** (download dataset and create manifests):
+   ```bash
+   ./run.sh --stage 1 --stop_stage 2
+   ```
+
+2. **Run inference** (extract embeddings and compute scores):
+   ```bash
+   ./run.sh --stage 4 --stop_stage 5
+   ```
+
+This will extract embeddings and score the evaluation dataset using the **baseline model**.
+
+#### Option B: Manual download from Hugging Face
+
+If you prefer to download manually:
+
+1. Go to the model page:  
+   `https://huggingface.co/areffarhadi/Resnet34-tidyvoiceX-ASV`
+2. Download:
+   - `avg_model.pt`
+   - `config.yaml`
+3. Place both files into:
+
+```text
+exp/samresnet34_voxblink_ft_tidy/models
+```
+
+Then you need to:
+
+1. **Prepare the data** (download dataset and create manifests):
+   ```bash
+   ./run.sh --stage 1 --stop_stage 2
+   ```
+
+2. **Run inference** (extract embeddings and compute scores):
+   ```bash
+   ./run.sh --stage 4 --stop_stage 5
+   ```
+
+This will run inference with the pretrained baseline model.
+
 ---
 
 ## Running the Baseline
 
-The main script is `run_vox_custom_paak.sh`, which performs the complete pipeline from data preparation to evaluation.
+The main script is `run.sh`, which performs the complete pipeline from data preparation to evaluation.
 
 ### Pipeline Stages
 
@@ -94,11 +180,19 @@ The script includes the following stages:
 11. **Stage 11**: Score from numpy embeddings
 12. **Stage 12**: Extract embeddings from a directory with WAV files
 
+> **⚠️ Important Note on Stages 6 and 7**: Stages 6 (score normalization) and 7 (score calibration) are **not valid for proper evaluation** when using the development set (`tidyvoice_dev`) because they utilize the same dev data for both:
+> - Training the normalization/calibration parameters (cohort set)
+> - Evaluating on the same data
+> 
+> This creates **data leakage** and will produce overly optimistic results that do not reflect true model performance. These stages are included in the codebase to demonstrate the implementation correctness, but **should not be used for final evaluation metrics** on the development set.
+> 
+> For proper evaluation, use only **stages 4-5** (embedding extraction and scoring) without normalization/calibration, or ensure that normalization/calibration use a different dataset than the one being evaluated.
+
 ### Quick Start
 
 #### 1. Configure the Script
 
-Edit `run_vox_custom_paak.sh` and set:
+Edit `run.sh` and set:
 - `TIDYVOICE_API_KEY`: Your API key (see above)
 - `stage` and `stop_stage`: Which stages to run
 - `gpus`: GPU IDs to use (e.g., `"[0]"` for single GPU)
@@ -109,28 +203,50 @@ Edit `run_vox_custom_paak.sh` and set:
 To run all stages (data preparation through evaluation):
 
 ```bash
-./run_vox_custom_paak.sh --stage 1 --stop_stage 7
+# Note: This includes stages 6-7 which have data leakage issues for tidyvoice_dev
+# For proper evaluation, use: ./run.sh --stage 1 --stop_stage 5
+./run.sh --stage 1 --stop_stage 7
 ```
+
+> **Note**: The above command includes stages 6-7, which are included for code correctness demonstration but should not be used for final evaluation metrics on `tidyvoice_dev` due to data leakage (see warning in Pipeline Stages section above).
 
 #### 3. Run Fine-tuning Only
 
 If you have already prepared the data and want to fine-tune the pretrained model:
 
 ```bash
-./run_vox_custom_paak.sh --stage 9 --stop_stage 9
+./run.sh --stage 9 --stop_stage 9
 ```
 
-#### 4. Run Evaluation Only
+#### 4. Run Inference/Evaluation
 
-To evaluate an existing model:
+To run inference with the pretrained baseline model:
+
+**Step 1**: Download data and prepare manifests (if not already done):
 
 ```bash
-./run_vox_custom_paak.sh --stage 4 --stop_stage 7
+./run.sh --stage 1 --stop_stage 2
 ```
+
+This will:
+- Download the TidyVoiceX dataset (and augmentation data)
+- Prepare data manifests (`wav.scp`, `utt2spk`, etc.)
+
+**Step 2**: Run inference to extract embeddings and compute scores:
+
+```bash
+./run.sh --stage 4 --stop_stage 5
+```
+
+This will:
+- Extract embeddings for the evaluation dataset using the pretrained baseline model
+- Compute scores and metrics (EER, MinDCF) on the evaluation dataset
+
+> **Note**: Stages 6-7 (normalization/calibration) are included for code correctness but should NOT be used for evaluation on `tidyvoice_dev` due to data leakage (see warning above in Pipeline Stages section). For proper evaluation, use only stages 4-5.
 
 ### Configuration Options
 
-Key parameters in `run_vox_custom_paak.sh`:
+Key parameters in `run.sh`:
 
 - `eval_dataset`: Set to `"tidyvoice_dev"` for development phase evaluation
 - `score_norm_method`: `"asnorm"` or `"snorm"` for score normalization
