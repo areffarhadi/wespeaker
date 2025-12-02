@@ -219,9 +219,9 @@ The script includes the following stages:
 > - Training the normalization/calibration parameters (cohort set)
 > - Evaluating on the same data
 > 
-> This creates **data leakage** and will produce overly optimistic results that do not reflect true model performance. These stages are included in the codebase to demonstrate the implementation correctness, but **should not be used for final evaluation metrics** on the development set.
+> This creates **data leakage** and will produce overly optimistic results that do not reflect true model performance. These stages are included in the codebase to demonstrate the implementation correctness.
 > 
-> For proper evaluation, use only **stages 4-5** (embedding extraction and scoring) without normalization/calibration, or ensure that normalization/calibration use a different dataset than the one being evaluated.
+> **When evaluating on final evaluation sets, utilizing `tidyvoice_dev` for normalization and calibration is valid.**
 
 ### Quick Start
 
@@ -406,12 +406,7 @@ If you encounter CUDA out of memory errors:
 If you use this baseline in your research, please cite:
 
 ```bibtex
-@inproceedings{tidyvoice2026,
-  title={TidyVoice Challenge: Cross-Lingual Speaker Verification},
-  author={...},
-  booktitle={Interspeech},
-  year={2026}
-}
+
 ```
 
 ---
