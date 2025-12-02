@@ -1,12 +1,8 @@
 # Fine‑tune SimAM‑ResNet34 pretrained on VoxBlink2 (large‑margin stage)
 # -------------------------------------------------------------------
-# This file is adapted from resnet_lm.yaml to fine‑tune a VoxBlink2
-# pretrained model on a custom dataset.
-
-# -------------------------------------------------------------------
 # Experiment & hardware
 # -------------------------------------------------------------------
-exp_dir: exp/samresnet34_voxblink_ft22
+exp_dir: exp/samresnet34_voxblink_ft_tidy
 
 gpus: [1]          # match torchrun and CUDA_VISIBLE_DEVICES
 num_avg: 1
@@ -60,10 +56,10 @@ dataset_args:
     prob: 0.6
 
 # -------------------------------------------------------------------
-# Model - must match VoxBlink2 pretraining
+# Model
 # -------------------------------------------------------------------
 model: SimAM_ResNet34_ASP
-model_init: /local/scratch/arfarh/wespeaker/wespeaker/examples/voxceleb/v2/voxblink2/voxblink2_samresnet34_ft/avg_model.pt
+model_init: voxblink2/voxblink2_samresnet34_ft/avg_model.pt
 model_args:
   embed_dim: 256
 

@@ -23,9 +23,9 @@ This baseline system uses a **SimAM-ResNet34** architecture that is:
 
 The baseline achieves the following performance on the TidyVoice development set:
 
-| Architecture | Pretraining Data | Fine-tuning Data | EER (%) | MinDCF |
-|:-------------|:----------------|:----------------|:-------:|:------:|
-| SimAM-ResNet34 | VoxBlink2 + VoxCeleb2 | TidyVoiceX Train | 3.07 | 0.82 |
+| Architecture | Pretraining Data | Fine-tuning Data | EER (%) | MinDCF | Model |
+|:-------------|:----------------|:----------------|:-------:|:------:|:-----:|
+| SimAM-ResNet34 | VoxBlink2 + VoxCeleb2 | TidyVoiceX Train | 3.07 | 0.82 | [🤗 Download](https://huggingface.co/areffarhadi/Resnet34-tidyvoiceX-ASV) |
 
 These results demonstrate the baseline's capability to handle cross-lingual speaker verification tasks.
 
@@ -51,29 +51,64 @@ Replace `"Enter your Mozilla CommonVoice API key here"` with your actual API key
 
 ### 2. Installation
 
-#### Install WeSpeaker
+Follow these steps to set up the environment:
 
-Follow the main WeSpeaker installation instructions. Please refer to the [WeSpeaker documentation](https://github.com/wenet-e2e/wespeaker) for detailed installation steps.
-
-Generally, the installation includes:
-- Python 3.9+
-- PyTorch (with CUDA support)
-- CUDA-capable GPU
-- Required Python packages
-
-#### Install DataCollective
-
-For downloading the TidyVoiceX dataset, you need to install the `datacollective` package:
+#### Step 1: Clone the Repository
 
 ```bash
-pip install datacollective
+git clone https://github.com/areffarhadi/wespeaker.git
+cd wespeaker
 ```
 
-This package is required for automatic dataset download via the DataCollective API.
+#### Step 2: Create Virtual Environment
 
-#### (Optional but Recommended) Install Hugging Face Hub
+```bash
+python3.9 -m venv we-env
+```
 
-If you want the **baseline pretrained model** to be downloaded automatically, install:
+#### Step 3: Activate Virtual Environment
+
+```bash
+# On Linux/Mac:
+source we-env/bin/activate
+
+# On Windows:
+we-env\Scripts\activate
+```
+
+#### Step 4: Install PyTorch
+
+Install PyTorch 1.12.1 with CUDA 11.3 support:
+
+```bash
+pip install torch==1.12.1 torchaudio==0.12.1 --extra-index-url https://download.pytorch.org/whl/cu113
+```
+
+> **Note**: If you need a different CUDA version or CPU-only version, visit [PyTorch installation guide](https://pytorch.org/get-started/previous-versions/) for the appropriate pip command.
+
+#### Step 5: Install Requirements
+
+```bash
+pip install -r requirements.txt
+```
+
+#### Step 6: Install Additional Packages
+
+```bash
+pip install whisper datacollective
+```
+
+#### Step 7: Install Pre-commit (Optional but Recommended)
+
+For clean and tidy code:
+
+```bash
+pre-commit install
+```
+
+#### (Optional) Install Hugging Face Hub
+
+If you want the **baseline pretrained model** to be downloaded automatically:
 
 ```bash
 pip install huggingface_hub

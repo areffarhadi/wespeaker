@@ -271,7 +271,7 @@ fi
 if [ ${stage} -le 12 ] && [ ${stop_stage} -ge 12 ]; then
   echo "Extract embeddings from a directory with .wav files ..."
 
-  exp_dir=/local/scratch/arfarh/wespeaker/wespeaker/examples/tidyvoice
+  exp_dir=/local/scratch/wespeaker/wespeaker/examples/tidyvoice
   model_path=$exp_dir/models/avg_model.pt
   wav_input_dir="/path/to/your/wav/files"
   npy_output_dir_custom="${exp_dir}/embeddings_npy/custom_dataset"

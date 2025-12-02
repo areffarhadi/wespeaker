@@ -2,15 +2,15 @@
 # -------------------------------------------------------------------
 # Experiment & hardware
 # -------------------------------------------------------------------
-exp_dir: exp/samresnet34_Tidy
+exp_dir: exp/samresnet34_scratch_Tidy
 
 gpus: [1]          # match torchrun and CUDA_VISIBLE_DEVICES
 num_avg: 1
 enable_amp: false
 
-do_lm: true
+do_lm: false  # set to false to enable speed perturbation for training from scratch
 seed: 42
-num_epochs: 6
+num_epochs: 150
 save_epoch_interval: 1
 log_batch_interval: 100
 
@@ -39,9 +39,9 @@ dataset_args:
     min_num_frames: 200
     max_num_frames: 800
   resample_rate: 16000
-  speed_perturb: false  # disable SP for fine-tuning
-  num_frms: 600
-  aug_prob: 0.3          # lighter augmentation for fine-tune
+  speed_perturb: true  # enable SP for training from scratch
+  num_frms: 200        
+  aug_prob: 0.6        # stronger augmentation for training from scratch
   fbank_args:
     num_mel_bins: 80
     frame_shift: 10
@@ -56,7 +56,7 @@ dataset_args:
     prob: 0.6
 
 # -------------------------------------------------------------------
-# Model - must match VoxBlink2 pretraining
+# Model
 # -------------------------------------------------------------------
 model: SimAM_ResNet34_ASP
 model_init: null
