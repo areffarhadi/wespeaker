@@ -36,6 +36,10 @@ venv
 
 exp
 data
+# VoxConverse v2 recipe: large local artifacts (also covered by exp/data/pretrained_models above)
+examples/voxconverse/v2/exp/
+examples/voxconverse/v2/data/
+examples/voxconverse/v2/pretrained_models/
 raw_wav
 tensorboard
 **/*build*
