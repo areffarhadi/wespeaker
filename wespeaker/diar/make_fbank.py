@@ -30,17 +30,32 @@ from wespeaker.utils.utils import validate_path
 def read_scp(scp_file):
     utt_to_wav = OrderedDict()
     for line in open(scp_file, 'r'):
-        utt, wav = line.strip().split()
+        line = line.strip()
+        if not line:
+            continue
+        utt, wav = line.split(maxsplit=1)
         utt_to_wav[utt] = wav
 
     return utt_to_wav
 
 
 def read_segments(segments_file):
+    """Parse lines from make_system_sad.py: seg utt begin end (seg = utt-ms-ms).
+
+    If utt or seg contains spaces, there are more than four whitespace tokens;
+    take begin/end as the last two floats and join the middle as utt.
+    """
     utt_to_segments = OrderedDict()
     for line in open(segments_file, 'r'):
-        seg, utt, begin, end = line.strip().split()
-        begin, end = float(begin), float(end)
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        parts = line.split()
+        if len(parts) < 4:
+            raise ValueError('Expected at least 4 fields in segment line: {!r}'.format(line))
+        begin, end = float(parts[-2]), float(parts[-1])
+        seg = parts[0]
+        utt = parts[1] if len(parts) == 4 else ' '.join(parts[1:-2])
         if utt not in utt_to_segments:
             utt_to_segments[utt] = [(seg, begin, end)]
         else:

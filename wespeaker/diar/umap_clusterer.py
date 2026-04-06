@@ -199,6 +199,11 @@ def get_args():
     parser.add_argument('--min_dist', required=False, default=0.05,
                         help="The minimum distance between points in "
                              "the low dimensional representation.")
+    parser.add_argument('--merge_cutoff', required=False, type=float,
+                        default=0.3,
+                        help="PAHC merge cutoff (normalised cosine "
+                             "similarity threshold). Tune on dev set; "
+                             "typical range 0.2–0.5. Default: 0.3")
     args = parser.parse_args()
     return args
 
@@ -221,7 +226,7 @@ def read_emb(scp):
     return subsegs_list, embeddings_list
 
 
-def cluster(embeddings, n_neighbors=16, min_dist=0.05):
+def cluster(embeddings, n_neighbors=16, min_dist=0.05, merge_cutoff=0.3):
     # Fallback
     if len(embeddings) <= 2:
         return [0] * len(embeddings)
@@ -238,7 +243,7 @@ def cluster(embeddings, n_neighbors=16, min_dist=0.05):
                              approx_min_span_tree=False,
                              core_dist_n_jobs=1).fit_predict(umap_embeddings)
 
-    labels = PAHC(merge_cutoff=0.3,
+    labels = PAHC(merge_cutoff=merge_cutoff,
                   min_cluster_size=3,
                   absorb_cutoff=0.0).fit_predict(labels, embeddings)
     return labels
@@ -252,10 +257,12 @@ if __name__ == '__main__':
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
 
     n_neighbors, min_dist = int(args.n_neighbors), float(args.min_dist)
+    merge_cutoff = float(args.merge_cutoff)
 
     run_cluster = functools.partial(cluster,
                                     n_neighbors=n_neighbors,
-                                    min_dist=min_dist)
+                                    min_dist=min_dist,
+                                    merge_cutoff=merge_cutoff)
 
     with concurrent.futures.ProcessPoolExecutor() as executor:
         with open(args.output, 'w') as fd:
