@@ -27,9 +27,9 @@ else
     PYTHON="${PYTHON:-python3}"
 fi
 
-stage=7
+stage=4
 stop_stage=9
-partition="test"         # dev/test
+partition="dev"         # dev/test
 subseg_cmn=true
 get_each_file_res=1
 

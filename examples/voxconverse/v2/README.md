@@ -1,3 +1,44 @@
+## Result summary (MISS / FA / SC / DER)
+
+Percentages are **of scored speaker time** (SCTK `md-eval`). **DER = MISS + FA + SC**, where **SC** is speaker confusion (speaker error time in `md-eval`). Baselines marked [^1] are from *Spot the conversation* (see footnote at end of file).
+
+Rows with **—** in MISS/FA/SC are reserved for you to fill after a full `md-eval` run (or only overall DER was recorded).
+
+### Development set (216 utterances)
+
+| system | MISS | FA | SC | DER |
+|:---|:---:|:---:|:---:|:---:|
+| Ours (oracle SAD + spectral clustering) | 2.3 | 0.0 | 2.1 | 4.4 |
+| Ours (oracle SAD + umap clustering) | 2.3 | 0.0 | 1.3 | 3.6 |
+| Ours (silero-vad v3.1 + spectral clustering) | 3.7 | 0.8 | 2.2 | 6.7 |
+| Ours (silero-vad v5.1 + spectral clustering) | 3.4 | 0.6 | 2.3 | 6.3 |
+| Ours (silero-vad v5.1 + umap clustering) | 3.4 | 0.6 | 1.4 | 5.4 |
+| Ours (PyAnnote VAD + DOVER-Lap, ResNet ONNX, `run_updated.sh`) | — | — | — | 4.0 |
+| Ours (FunASR FSMN-VAD + DOVER-Lap, ResNet ONNX, `run_updated.sh`) | 2.8 | 0.5 | 1.03 | 4.33 |
+| Ours (w2v-BERT + DOVER-Lap + overlap, `run_w2vbert.sh`) | 1.6 | 0.7 | 3.2 | 5.49 |
+| Ours (w2v-BERT + DOVER-Lap, no overlap, `run_w2vbert.sh`) | 3.1 | 0.3 | 2.5 | 5.88 |
+| DIHARD 2019 baseline [^1] | 11.1 | 1.4 | 11.3 | 23.8 |
+| DIHARD 2019 baseline w/ SE [^1] | 9.3 | 1.3 | 9.7 | 20.2 |
+| (SyncNet ASD only) [^1] | 2.2 | 4.1 | 4.0 | 10.4 |
+| (AVSE ASD only) [^1] | 2.0 | 5.9 | 4.6 | 12.4 |
+| (proposed) [^1] | 2.4 | 2.3 | 3.0 | 7.7 |
+
+### Test set (232 utterances)
+
+| system | MISS | FA | SC | DER |
+|:---|:---:|:---:|:---:|:---:|
+| Ours (oracle SAD + spectral clustering) | 1.6 | 0.0 | 3.3 | 4.9 |
+| Ours (oracle SAD + umap clustering) | 1.6 | 0.0 | 1.9 | 3.5 |
+| Ours (silero-vad v3.1 + spectral clustering) | 4.0 | 2.4 | 3.4 | 9.8 |
+| Ours (silero-vad v5.1 + spectral clustering) | 3.8 | 1.7 | 3.3 | 8.8 |
+| Ours (silero-vad v5.1 + umap clustering) | 3.8 | 1.7 | 1.8 | 7.3 |
+| Ours (PyAnnote VAD + DOVER-Lap, ResNet ONNX, `run_updated.sh`) | — | — | — | 6.64 |
+| Ours (FunASR FSMN-VAD + DOVER-Lap, ResNet ONNX, `run_updated.sh`) | 2.8 | 1.1 | 1.76 | 5.66 |
+| Ours (w2v-BERT + DOVER-Lap + overlap, `run_w2vbert.sh`) | 2.4 | 1.8 | 2.8 | 7.00 |
+| Ours (w2v-BERT + DOVER-Lap, no overlap, `run_w2vbert.sh`) | 3.4 | 1.1 | 2.4 | 6.80 |
+
+---
+
 ## Overview
 
 * We suggest to run this recipe on a gpu-available machine, with onnxruntime-gpu supported.
@@ -8,38 +49,16 @@
 * Speaker activity detection model:
   * oracle SAD (from ground truth annotation)
   * system SAD (VAD model pretrained by [silero-vad](https://github.com/snakers4/silero-vad), v3.1 => v5.1)
+  * optional: PyAnnote segmentation, [FunASR FSMN-VAD](https://huggingface.co/funasr/fsmn-vad) (`--sad_type` in `run_updated.sh` / `run_w2vbert.sh`)
 * Clustering method:
   * spectral clustering
   * umap dimensionality reduction + hdbscan clustering
+  * DOVER-Lap fusion (UMAP + AHC + spectral) in the extended scripts
 * Metric: DER = MISS + FALSE ALARM + SPEAKER CONFUSION (%)
 
 ## Results
 
-* Dev set
-
-    | system | MISS | FA | SC | DER |
-    |:---|:---:|:---:|:---:|:---:|
-    | Ours (oracle SAD + spectral clustering) | 2.3 | 0.0 | 2.1 | 4.4 |
-    | Ours (oracle SAD + umap clustering) | 2.3 | 0.0 | 1.3 | 3.6 |
-    | Ours (silero-vad v3.1 + spectral clustering) | 3.7 | 0.8 | 2.2 | 6.7 |
-    | Ours (silero-vad v5.1 + spectral clustering) | 3.4 | 0.6 | 2.3 | 6.3 |
-    | Ours (silero-vad v5.1 + umap clustering) | 3.4 | 0.6 | 1.4 | 5.4 |
-    | DIHARD 2019 baseline [^1] | 11.1 | 1.4 | 11.3 | 23.8 |
-    | DIHARD 2019 baseline w/ SE [^1] | 9.3 | 1.3 | 9.7 | 20.2 |
-    | (SyncNet ASD only) [^1] | 2.2 | 4.1 | 4.0 | 10.4 |
-    | (AVSE ASD only) [^1] | 2.0 | 5.9 | 4.6 | 12.4 |
-    | (proposed) [^1] | 2.4 | 2.3 | 3.0 | 7.7 |
-
-* Test set
-
-    | system | MISS | FA | SC | DER |
-    |:---|:---:|:---:|:---:|:---:|
-    | Ours (oracle SAD + spectral clustering) | 1.6 | 0.0 | 3.3 | 4.9 |
-    | Ours (oracle SAD + umap clustering) | 1.6 | 0.0 | 1.9 | 3.5 |
-    | Ours (silero-vad v3.1 + spectral clustering) | 4.0 | 2.4 | 3.4 | 9.8 |
-    | Ours (silero-vad v5.1 + spectral clustering) | 3.8 | 1.7 | 3.3 | 8.8 |
-    | Ours (silero-vad v5.1 + umap clustering) | 3.8 | 1.7 | 1.8 | 7.3 |
-
+The **Result summary** tables at the top of this README list all configurations in one place (oracle / Silero / extended recipe / w2v-BERT / baselines). Numbers for oracle and Silero + spectral/umap match the original recipe reporting. **FunASR FSMN-VAD + ResNet + DOVER-Lap** uses MISS/FA from the time-weighted matrix and **SC = DER − MISS − FA** (see the FunASR subsection below). **PyAnnote + ResNet** rows still give **DER only** in the summary—replace **—** in MISS/FA/SC after you copy a full `md-eval` log if you want them filled.
 
 [^1]: Spot the conversation: speaker diarisation in the wild, https://arxiv.org/pdf/2007.01216.pdf
 
@@ -122,6 +141,88 @@ unknown                1279 /  85.1%        224 /  14.9%
 unknown           127817.75 /  97.6%    3136.57 /   2.4%
   FALSE ALARM       2357.95 /   1.8%
 ---------------------------------------------
+```
+
+### FunASR FSMN-VAD (`run_updated.sh`, `--sad_type funasr_fsmn`)
+
+Same pipeline as the PyAnnote [`run_updated.sh`](run_updated.sh) path (ResNet34 ONNX embeddings, `cluster_type=doverlap`, optional Demucs/overlap per script defaults), but **VAD = [FunASR FSMN-VAD](https://huggingface.co/funasr/fsmn-vad)** via `wespeaker/diar/make_funasr_fsmn_sad.py`. Requires `funasr` in the WeSpeaker `.venv` (see script header).
+
+```bash
+./run_updated.sh --sad_type funasr_fsmn --partition dev --stage 4 --stop_stage 9
+./run_updated.sh --sad_type funasr_fsmn --partition test --stage 4 --stop_stage 9
+```
+
+| Partition | MISS | FA | SC | DER |
+|:---|:---:|:---:|:---:|:---:|
+| dev | 2.8 | 0.5 | 1.03 | 4.33 |
+| test | 2.8 | 1.1 | 1.76 | 5.66 |
+
+**MISS** and **FA** are taken from the **time-weighted** confusion matrix (`md-eval`). **SC** is reported as **DER − MISS − FA** so the four columns sum to the stated **OVERALL** DER (the excerpt below does not print `SPEAKER ERROR TIME` separately).
+
+#### Dev (`--partition dev`)
+
+Excerpt from `md-eval` (**speaker-type confusion matrices**).
+
+##### Speaker weighted (counts)
+
+| REF \ SYS | unknown | MISS |
+|:---|:---:|:---:|
+| unknown | 878 / 90.3% | 94 / 9.7% |
+| FALSE ALARM | 32 / 3.3% | — |
+
+##### Time weighted (seconds)
+
+| REF \ SYS | unknown | MISS |
+|:---|:---:|:---:|
+| unknown | 62700.73 / 97.2% | 1824.60 / 2.8% |
+| FALSE ALARM | 347.18 / 0.5% | — |
+
+Raw log fragment:
+
+```
+ OVERALL SPEAKER DIARIZATION ERROR = 4.33 percent of scored speaker time  `(ALL)
+---------------------------------------------
+ Speaker type confusion matrix -- speaker weighted
+  REF\SYS (count)      unknown               MISS
+unknown                 878 /  90.3%         94 /   9.7%
+  FALSE ALARM            32 /   3.3%
+---------------------------------------------
+ Speaker type confusion matrix -- time weighted
+  REF\SYS (seconds)    unknown               MISS
+unknown            62700.73 /  97.2%    1824.60 /   2.8%
+  FALSE ALARM        347.18 /   0.5%
+```
+
+#### Test (`--partition test`)
+
+##### Speaker weighted (counts)
+
+| REF \ SYS | unknown | MISS |
+|:---|:---:|:---:|
+| unknown | 1280 / 85.2% | 223 / 14.8% |
+| FALSE ALARM | 169 / 11.2% | — |
+
+##### Time weighted (seconds)
+
+| REF \ SYS | unknown | MISS |
+|:---|:---:|:---:|
+| unknown | 127239.99 / 97.2% | 3714.33 / 2.8% |
+| FALSE ALARM | 1472.62 / 1.1% | — |
+
+Raw log fragment:
+
+```
+ OVERALL SPEAKER DIARIZATION ERROR = 5.66 percent of scored speaker time  `(ALL)
+---------------------------------------------
+ Speaker type confusion matrix -- speaker weighted
+  REF\SYS (count)      unknown               MISS
+unknown                1280 /  85.2%        223 /  14.8%
+  FALSE ALARM           169 /  11.2%
+---------------------------------------------
+ Speaker type confusion matrix -- time weighted
+  REF\SYS (seconds)    unknown               MISS
+unknown           127239.99 /  97.2%    3714.33 /   2.8%
+  FALSE ALARM       1472.62 /   1.1%
 ```
 
 ### w2v-BERT (`run_w2vbert.sh`)
