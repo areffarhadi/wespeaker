@@ -17,6 +17,7 @@ Rows with **—** in MISS/FA/SC are reserved for you to fill after a full `md-ev
 | Ours (FunASR FSMN-VAD + DOVER-Lap, ResNet ONNX, `run_updated.sh`) | 2.8 | 0.5 | 1.03 | 4.33 |
 | Ours (w2v-BERT + DOVER-Lap + overlap, `run_w2vbert.sh`) | 1.6 | 0.7 | 3.2 | 5.49 |
 | Ours (w2v-BERT + DOVER-Lap, no overlap, `run_w2vbert.sh`) | 3.1 | 0.3 | 2.5 | 5.88 |
+| Ours (w2v-BERT + UMAP, FunASR FSMN-VAD, `run_w2vbert.sh`) | 2.8 | 0.5 | 2.69 | 5.99 |
 | DIHARD 2019 baseline [^1] | 11.1 | 1.4 | 11.3 | 23.8 |
 | DIHARD 2019 baseline w/ SE [^1] | 9.3 | 1.3 | 9.7 | 20.2 |
 | (SyncNet ASD only) [^1] | 2.2 | 4.1 | 4.0 | 10.4 |
@@ -36,6 +37,7 @@ Rows with **—** in MISS/FA/SC are reserved for you to fill after a full `md-ev
 | Ours (FunASR FSMN-VAD + DOVER-Lap, ResNet ONNX, `run_updated.sh`) | 2.8 | 1.1 | 1.76 | 5.66 |
 | Ours (w2v-BERT + DOVER-Lap + overlap, `run_w2vbert.sh`) | 2.4 | 1.8 | 2.8 | 7.00 |
 | Ours (w2v-BERT + DOVER-Lap, no overlap, `run_w2vbert.sh`) | 3.4 | 1.1 | 2.4 | 6.80 |
+| Ours (w2v-BERT + UMAP, FunASR FSMN-VAD, `run_w2vbert.sh`) | 2.8 | 1.1 | 2.40 | 6.30 |
 
 ---
 
@@ -337,6 +339,88 @@ unknown           126557.98 /  96.6%    4396.34 /   3.4%
 ---------------------------------------------
 ```
 
+### w2v-BERT + FunASR FSMN-VAD + UMAP (`run_w2vbert.sh`)
+
+[`run_w2vbert.sh`](run_w2vbert.sh) with **FunASR FSMN-VAD** and **UMAP+HDBSCAN** clustering (no DOVER-Lap fusion). Example:
+
+```bash
+./run_w2vbert.sh --sad_type funasr_fsmn --cluster_type umap --partition dev --stage 4 --stop_stage 9
+./run_w2vbert.sh --sad_type funasr_fsmn --cluster_type umap --partition test --stage 4 --stop_stage 9
+```
+
+Use the same **w2v-BERT** checkpoint / repo env vars as other `run_w2vbert.sh` runs. Default `use_demucs=false`, `use_overlap=false` unless you override.
+
+| Partition | MISS | FA | SC | DER |
+|:---|:---:|:---:|:---:|:---:|
+| dev | 2.8 | 0.5 | 2.69 | 5.99 |
+| test | 2.8 | 1.1 | 2.40 | 6.30 |
+
+**MISS** / **FA** from the **time-weighted** matrix; **SC = DER − MISS − FA** (no separate `SPEAKER ERROR TIME` line in the excerpts below).
+
+#### Dev (`--partition dev`)
+
+##### Speaker weighted (counts)
+
+| REF \ SYS | unknown | MISS |
+|:---|:---:|:---:|
+| unknown | 874 / 89.9% | 98 / 10.1% |
+| FALSE ALARM | 55 / 5.7% | — |
+
+##### Time weighted (seconds)
+
+| REF \ SYS | unknown | MISS |
+|:---|:---:|:---:|
+| unknown | 62700.73 / 97.2% | 1824.60 / 2.8% |
+| FALSE ALARM | 347.18 / 0.5% | — |
+
+Raw log fragment:
+
+```
+ OVERALL SPEAKER DIARIZATION ERROR = 5.99 percent of scored speaker time  `(ALL)
+---------------------------------------------
+ Speaker type confusion matrix -- speaker weighted
+  REF\SYS (count)      unknown               MISS
+unknown                 874 /  89.9%         98 /  10.1%
+  FALSE ALARM            55 /   5.7%
+---------------------------------------------
+ Speaker type confusion matrix -- time weighted
+  REF\SYS (seconds)    unknown               MISS
+unknown            62700.73 /  97.2%    1824.60 /   2.8%
+  FALSE ALARM        347.18 /   0.5%
+```
+
+#### Test (`--partition test`)
+
+##### Speaker weighted (counts)
+
+| REF \ SYS | unknown | MISS |
+|:---|:---:|:---:|
+| unknown | 1275 / 84.8% | 228 / 15.2% |
+| FALSE ALARM | 95 / 6.3% | — |
+
+##### Time weighted (seconds)
+
+| REF \ SYS | unknown | MISS |
+|:---|:---:|:---:|
+| unknown | 127239.99 / 97.2% | 3714.33 / 2.8% |
+| FALSE ALARM | 1472.62 / 1.1% | — |
+
+Raw log fragment:
+
+```
+ OVERALL SPEAKER DIARIZATION ERROR = 6.30 percent of scored speaker time  `(ALL)
+---------------------------------------------
+ Speaker type confusion matrix -- speaker weighted
+  REF\SYS (count)      unknown               MISS
+unknown                1275 /  84.8%        228 /  15.2%
+  FALSE ALARM            95 /   6.3%
+---------------------------------------------
+ Speaker type confusion matrix -- time weighted
+  REF\SYS (seconds)    unknown               MISS
+unknown           127239.99 /  97.2%    3714.33 /   2.8%
+  FALSE ALARM       1472.62 /   1.1%
+```
+
 ### Running `run_w2vbert.sh` (w2v-BERT diarization)
 
 The script [`run_w2vbert.sh`](run_w2vbert.sh) runs the **VoxConverse v2** recipe with **w2v-BERT-2.0 speaker-verification embeddings** (PyTorch checkpoint) instead of the default ResNet34 ONNX pipeline (`run.sh`). From this directory:
@@ -350,7 +434,7 @@ Useful overrides (see `help_message` in the script for the full list):
 
 * **Stages:** `1`=SCTK, `2`=download data + `wav.scp`, `3`=optional Demucs, `4`=VAD, `5`=fbank, `6`=w2v-BERT embeddings, `7`=clustering, `8`=RTTM (and optional overlap), `9`=DER. Defaults (`stage` / `stop_stage` in the script) are set to start after prerequisites; adjust `--stage` / `--stop_stage` if you need to download tools/data or run Demucs.
 * **Partition:** `--partition dev` or `--partition test`.
-* **VAD:** `--sad_type oracle` | `system` (Silero) | `pyannote` (PyAnnote; may require HF token / model setup).
+* **VAD:** `--sad_type oracle` | `system` (Silero) | `pyannote` | `funasr_fsmn` (FunASR; `pip install funasr` in WeSpeaker `.venv`).
 * **Demucs:** `--use_demucs true` (requires `pip install demucs`; run stage 3 before VAD).
 * **Clustering:** `--cluster_type spectral` | `umap` | `ahc` | `doverlap` (DOVER-Lap fusion of UMAP + AHC + spectral RTTMs).
 * **Overlap:** `--use_overlap true|false` (PyAnnote-based overlap pass on the system RTTM).
@@ -362,7 +446,7 @@ Logs are written to a timestamped `run_w2vbert_*.log` in the same directory.
 
 * **w2v-BERT SV embeddings** — Segment-level embeddings from a **w2v-BERT-2.0 SV** checkpoint for diarization, with outputs tagged `*_w2vbert` so they do not overwrite ResNet runs.
 * **Optional Demucs** — **Vocal separation** (`htdemucs` by default) before VAD to reduce music/noise; writes `wav_demucs.scp` when enabled.
-* **Flexible SAD** — **Oracle** (RTTM-derived), **Silero** VAD, or **PyAnnote** segmentation before fbank and embedding extraction.
+* **Flexible SAD** — **Oracle** (RTTM-derived), **Silero** VAD, **PyAnnote**, or **FunASR FSMN-VAD** before fbank and embedding extraction.
 * **Fbank + sliding windows** — Standard fbank features for the pipeline, then **w2v-BERT** extraction with configurable window/stride (see `extract_emb_w2vbert.sh` / script defaults).
 * **Clustering options** — **Spectral**, **UMAP+HDBSCAN**, **AHC**, or **DOVER-Lap** to fuse three base clusterers into one RTTM.
 * **Optional overlap handling** — Post-processing **overlap detection** on the system RTTM using embeddings and audio (PyAnnote-based tool in-repo).
