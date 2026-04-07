@@ -17,7 +17,7 @@
 #
 # -----------------------------------------------------------------------------
 # VoxConverse v2 — w2v-BERT-2.0 SV embeddings with the SAME options as run_updated.sh
-# (PyAnnote/Silero/oracle VAD, optional Demucs, spectral/umap/ahc/doverlap, overlap pass).
+# (PyAnnote/Silero/oracle/FunASR FSMN VAD, optional Demucs, spectral/umap/ahc/doverlap, overlap pass).
 # Compare to: run_updated.sh (ResNet ONNX embeddings).
 # Simpler w2v-only recipe without DOVER-Lap/pyannote overlap extras: run_w2vbert_org.sh
 #
@@ -26,6 +26,15 @@
 
 . ./path.sh || exit 1
 
+# Prefer repo .venv (FunASR, torch); override with PYTHON=/path/to/python.
+_ws_root="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../../.." && pwd)"
+if [ -z "${PYTHON}" ] && [ -x "${_ws_root}/.venv/bin/python" ]; then
+    PYTHON="${_ws_root}/.venv/bin/python"
+    export PATH="${_ws_root}/.venv/bin:${PATH}"
+else
+    PYTHON="${PYTHON:-python3}"
+fi
+
 stage=4
 stop_stage=9
 partition="test"   # test / dev
@@ -33,11 +42,15 @@ subseg_cmn=true
 get_each_file_res=1
 
 # ── VAD (same as run_updated.sh) ─────────────────────────────────────
-sad_type="system"       # oracle / system (Silero) / pyannote
+sad_type="funasr_fsmn"       # oracle / system (Silero) / pyannote / funasr_fsmn
 pyannote_device="${PYANNOTE_DEVICE:-cpu}"
 pyannote_onset=0.5
 pyannote_offset=0.5
 pyannote_nj=16
+funasr_hub="${FUNASR_HUB:-hf}"
+funasr_revision="${FUNASR_REVISION:-v2.0.4}"
+funasr_device="${FUNASR_DEVICE:-cpu}"
+funasr_nj="${FUNASR_NJ:-4}"
 
 # ── Demucs (optional) ────────────────────────────────────────────────
 use_demucs=false
@@ -52,7 +65,7 @@ emb_batch_size=8
 emb_device="${W2VBERT_EMB_DEVICE:-cuda}"
 
 # ── Clustering (same as run_updated.sh) ───────────────────────────────
-cluster_type="doverlap"   # spectral / umap / ahc / doverlap
+cluster_type="doverlap"   # oracle / system (Silero) / pyannote / funasr_fsmn
 merge_cutoff=0.2
 ahc_threshold=0.21
 ahc_linkage="average"
@@ -79,7 +92,7 @@ VoxConverse v2 w2v-BERT pipeline — option-compatible with run_updated.sh (ResN
 
 Stages: 1=SCTK 2=data 3=Demucs 4=VAD 5=fbank 6=w2v-BERT 7=cluster 8=RTTM+overlap 9=DER
 
-  --sad_type system|pyannote|oracle
+  --sad_type system|pyannote|oracle|funasr_fsmn
   --cluster_type spectral|umap|ahc|doverlap
   --use_demucs true|false
   --use_overlap true|false
@@ -87,7 +100,8 @@ Stages: 1=SCTK 2=data 3=Demucs 4=VAD 5=fbank 6=w2v-BERT 7=cluster 8=RTTM+overlap
   --bash_trace true|false
 
 Env: W2VBERT_REPO, W2VBERT_CHECKPOINT, HF_MODELS, W2VBERT_EMB_DEVICE, HF_TOKEN (PyAnnote),
-     DEMUCS_DEVICE, PYANNOTE_DEVICE, OVERLAP_DEVICE
+     DEMUCS_DEVICE, PYANNOTE_DEVICE, OVERLAP_DEVICE,
+     FUNASR_HUB, FUNASR_REVISION, FUNASR_DEVICE, FUNASR_NJ (funasr_fsmn)
 
 Note: Stage 1 downloads SCTK only (no ResNet ONNX — not used for w2v-BERT)."
 
@@ -132,7 +146,7 @@ print_summary() {
 }
 
 extract_zip() {
-    python3 local/extract_zip.py "$1" "$2" || exit 1
+    "${PYTHON}" local/extract_zip.py "$1" "$2" || exit 1
 }
 
 resolve_wav_scp() {
@@ -188,7 +202,7 @@ if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
         demucs_vocals_dir="data/${partition}/demucs_vocals"
         rm -rf "${demucs_vocals_dir}" 2>/dev/null
         mkdir -p "${demucs_vocals_dir}"
-        python3 wespeaker/diar/demucs_vocals.py \
+        "${PYTHON}" wespeaker/diar/demucs_vocals.py \
                 --scp "data/${partition}/wav.scp" \
                 --out-dir "${demucs_vocals_dir}" \
                 --wav-scp-out "data/${partition}/wav_demucs.scp" \
@@ -208,7 +222,7 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
 
     if [[ "x${sad_type}" == "xoracle" ]]; then
         while read -r utt wav_path; do
-            python3 wespeaker/diar/make_oracle_sad.py \
+            "${PYTHON}" wespeaker/diar/make_oracle_sad.py \
                     --rttm data/voxconverse-master/${partition}/${utt}.rttm \
                     --min-duration $min_duration
         done < "${wav_scp}" > data/${partition}/oracle_sad
@@ -217,11 +231,11 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
 
     if [[ "x${sad_type}" == "xsystem" ]]; then
        if [ "$verbose" = true ]; then
-           python3 wespeaker/diar/make_system_sad.py \
+           "${PYTHON}" wespeaker/diar/make_system_sad.py \
                    --scp "${wav_scp}" \
                    --min-duration $min_duration | tee "data/${partition}/system_sad"
        else
-           python3 wespeaker/diar/make_system_sad.py \
+           "${PYTHON}" wespeaker/diar/make_system_sad.py \
                    --scp "${wav_scp}" \
                    --min-duration $min_duration > "data/${partition}/system_sad" 2>/dev/null
        fi
@@ -234,7 +248,7 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
 
     if [[ "x${sad_type}" == "xpyannote" ]]; then
        echo "PyAnnote VAD (device=${pyannote_device}, nj=${pyannote_nj}) ..."
-       python3 wespeaker/diar/make_pyannote_sad.py \
+       "${PYTHON}" wespeaker/diar/make_pyannote_sad.py \
                --scp "${wav_scp}" \
                --min-duration $min_duration \
                --onset ${pyannote_onset} \
@@ -245,6 +259,22 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
        echo "PyAnnote SAD: ${sad_lines} segments"
        if [ "$sad_lines" -eq 0 ]; then
            echo "$0: pyannote_sad empty — check HF_TOKEN / models." ; exit 1
+       fi
+    fi
+
+    if [[ "x${sad_type}" == "xfunasr_fsmn" ]]; then
+       echo "FunASR FSMN-VAD (hub=${funasr_hub}, device=${funasr_device}, nj=${funasr_nj}) ..."
+       "${PYTHON}" wespeaker/diar/make_funasr_fsmn_sad.py \
+               --scp "${wav_scp}" \
+               --min-duration $min_duration \
+               --hub "${funasr_hub}" \
+               --model-revision "${funasr_revision}" \
+               --device "${funasr_device}" \
+               --nj "${funasr_nj}" > "data/${partition}/funasr_fsmn_sad" || exit 1
+       sad_lines=$(wc -l < "data/${partition}/funasr_fsmn_sad")
+       echo "FunASR FSMN SAD: ${sad_lines} segments"
+       if [ "$sad_lines" -eq 0 ]; then
+           echo "$0: funasr_fsmn_sad empty — install funasr in WeSpeaker .venv / check wav.scp." ; exit 1
        fi
     fi
 
@@ -317,28 +347,28 @@ if [ ${stage} -le 7 ] && [ ${stop_stage} -ge 7 ]; then
         mkdir -p exp/umap_cluster exp/ahc_cluster exp/spectral_cluster exp/doverlap_cluster
 
         echo "  [1/3] UMAP+HDBSCAN (merge_cutoff=${merge_cutoff})"
-        python3 wespeaker/diar/umap_clusterer.py \
+        "${PYTHON}" wespeaker/diar/umap_clusterer.py \
                 --scp "${emb_scp}" \
                 --output exp/umap_cluster/${labels_suffix} \
                 --merge_cutoff ${merge_cutoff}
-        python3 wespeaker/diar/make_rttm.py \
+        "${PYTHON}" wespeaker/diar/make_rttm.py \
                 --labels exp/umap_cluster/${labels_suffix} \
                 --channel 1 > exp/umap_cluster/${rttm_suffix}
 
         echo "  [2/3] AHC (threshold=${ahc_threshold}, ${ahc_linkage})"
-        python3 wespeaker/diar/ahc_clusterer.py \
+        "${PYTHON}" wespeaker/diar/ahc_clusterer.py \
                 --scp "${emb_scp}" \
                 --output exp/ahc_cluster/${labels_suffix} \
                 --threshold ${ahc_threshold} --linkage ${ahc_linkage}
-        python3 wespeaker/diar/make_rttm.py \
+        "${PYTHON}" wespeaker/diar/make_rttm.py \
                 --labels exp/ahc_cluster/${labels_suffix} \
                 --channel 1 > exp/ahc_cluster/${rttm_suffix}
 
         echo "  [3/3] Spectral"
-        python3 wespeaker/diar/spectral_clusterer.py \
+        "${PYTHON}" wespeaker/diar/spectral_clusterer.py \
                 --scp "${emb_scp}" \
                 --output exp/spectral_cluster/${labels_suffix}
-        python3 wespeaker/diar/make_rttm.py \
+        "${PYTHON}" wespeaker/diar/make_rttm.py \
                 --labels exp/spectral_cluster/${labels_suffix} \
                 --channel 1 > exp/spectral_cluster/${rttm_suffix}
 
@@ -369,7 +399,7 @@ if [ ${stage} -le 7 ] && [ ${stop_stage} -ge 7 ]; then
         elif [ "${cluster_type}" == "ahc" ]; then
             cluster_extra_args="--threshold ${ahc_threshold} --linkage ${ahc_linkage}"
         fi
-        python3 wespeaker/diar/${cluster_type}_clusterer.py \
+        "${PYTHON}" wespeaker/diar/${cluster_type}_clusterer.py \
                 --scp "${emb_scp}" \
                 --output exp/${cluster_type}_cluster/${labels_suffix} \
                 ${cluster_extra_args}
@@ -380,7 +410,7 @@ fi
 # --- Stage 8: RTTM (non-doverlap only) ---
 if [ ${stage} -le 8 ] && [ ${stop_stage} -ge 8 ] && [ "$cluster_type" != "doverlap" ]; then
     stage_banner "Stage 8: labels -> RTTM"
-    python3 wespeaker/diar/make_rttm.py \
+    "${PYTHON}" wespeaker/diar/make_rttm.py \
             --labels exp/${cluster_type}_cluster/${partition}_${sad_type}_sad${W2V}_labels \
             --channel 1 > exp/${cluster_type}_cluster/${partition}_${sad_type}_sad${W2V}_rttm
     stage_done 8 "RTTM generated"
@@ -394,7 +424,7 @@ if [ ${stage} -le 8 ] && [ ${stop_stage} -ge 8 ] && [ "$use_overlap" = true ]; t
     rttm_ovl="${rttm_in}_overlap"
     stage_banner "Stage 8: overlap detection"
     echo "Overlap (device=${overlap_device}, nj=${overlap_nj}) ..."
-    python3 wespeaker/diar/overlap_detection.py \
+    "${PYTHON}" wespeaker/diar/overlap_detection.py \
             --rttm "${rttm_in}" \
             --scp-wav "${wav_scp}" \
             --scp-emb "${emb_scp}" \

@@ -17,19 +17,34 @@
 
 . ./path.sh || exit 1
 
-stage=4
+# Prefer repo .venv so FunASR / torch match (override with PYTHON=/path/to/python).
+_ws_root="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../../.." && pwd)"
+if [ -z "${PYTHON}" ] && [ -x "${_ws_root}/.venv/bin/python" ]; then
+    PYTHON="${_ws_root}/.venv/bin/python"
+    # make_fbank.sh / extract_emb.sh call python3 — put venv first on PATH
+    export PATH="${_ws_root}/.venv/bin:${PATH}"
+else
+    PYTHON="${PYTHON:-python3}"
+fi
+
+stage=7
 stop_stage=9
 partition="test"         # dev/test
 subseg_cmn=true
 get_each_file_res=1
 
 # ── VAD ──────────────────────────────────────────────────────────────
-sad_type="pyannote"       # oracle / system (Silero) / pyannote
+sad_type="funasr_fsmn"       # oracle / system (Silero) / pyannote / funasr_fsmn
 # PyAnnote VAD settings (only when sad_type=pyannote)
 pyannote_device="${PYANNOTE_DEVICE:-cpu}"
 pyannote_onset=0.5
 pyannote_offset=0.5
 pyannote_nj=16
+# FunASR FSMN-VAD (only when sad_type=funasr_fsmn); needs: pip install funasr
+funasr_hub="${FUNASR_HUB:-hf}"              # hf | ms
+funasr_revision="${FUNASR_REVISION:-v2.0.4}"
+funasr_device="${FUNASR_DEVICE:-cpu}"     # use cpu if nj>1; cuda ok with --funasr_nj 1
+funasr_nj="${FUNASR_NJ:-4}"
 
 # ── Demucs (optional vocal separation before VAD) ───────────────────
 use_demucs=false
@@ -53,7 +68,7 @@ doverlap_gaussian_std=0.5        # 0.01=no filtering, 0.5=default
 doverlap_dover_weight=0.05       # tuned on dev
 
 # ── Overlap detection (optional, after RTTM) ────────────────────────
-use_overlap=true
+use_overlap=false
 overlap_device="${OVERLAP_DEVICE:-cpu}"
 overlap_min_dur=0.1
 overlap_nj=16
@@ -62,14 +77,14 @@ overlap_nj=16
 
 help_message="Usage: $0 [options]
 Stages: 1=SCTK+ResNet 2=data 3=Demucs 4=VAD 5=fbank 6=embed 7=cluster 8=RTTM 9=DER
-  --sad_type system|pyannote|oracle   VAD backend (default: system)
+  --sad_type system|pyannote|oracle|funasr_fsmn   VAD backend
   --cluster_type spectral|umap|ahc|doverlap  (default: doverlap)
   --use_demucs true|false     Demucs vocals before VAD (default: false)
   --use_overlap true|false    PyAnnote overlap detection (default: false)"
 
 # Extract .zip with Python stdlib (no system `unzip` required — see local/extract_zip.py)
 extract_zip() {
-    python3 local/extract_zip.py "$1" "$2" || exit 1
+    "${PYTHON}" local/extract_zip.py "$1" "$2" || exit 1
 }
 
 # wav.scp for VAD / fbank: original mix or Demucs vocals
@@ -151,7 +166,7 @@ if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
         demucs_vocals_dir="data/${partition}/demucs_vocals"
         rm -rf "${demucs_vocals_dir}" 2>/dev/null
         mkdir -p "${demucs_vocals_dir}"
-        python3 wespeaker/diar/demucs_vocals.py \
+        "${PYTHON}" wespeaker/diar/demucs_vocals.py \
                 --scp "data/${partition}/wav.scp" \
                 --out-dir "${demucs_vocals_dir}" \
                 --wav-scp-out "data/${partition}/wav_demucs.scp" \
@@ -171,7 +186,7 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
 
     if [[ "x${sad_type}" == "xoracle" ]]; then
         while read -r utt wav_path; do
-            python3 wespeaker/diar/make_oracle_sad.py \
+            "${PYTHON}" wespeaker/diar/make_oracle_sad.py \
                     --rttm data/voxconverse-master/${partition}/${utt}.rttm \
                     --min-duration $min_duration
         done < "${wav_scp}" > data/${partition}/oracle_sad
@@ -179,7 +194,7 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
     fi
 
     if [[ "x${sad_type}" == "xsystem" ]]; then
-       python3 wespeaker/diar/make_system_sad.py \
+       "${PYTHON}" wespeaker/diar/make_system_sad.py \
                --scp "${wav_scp}" \
                --min-duration $min_duration > data/${partition}/system_sad
        sad_lines=$(wc -l < "data/${partition}/system_sad")
@@ -188,7 +203,7 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
 
     if [[ "x${sad_type}" == "xpyannote" ]]; then
        echo "Running PyAnnote VAD (device=${pyannote_device}, nj=${pyannote_nj}) ..."
-       python3 wespeaker/diar/make_pyannote_sad.py \
+       "${PYTHON}" wespeaker/diar/make_pyannote_sad.py \
                --scp "${wav_scp}" \
                --min-duration $min_duration \
                --onset ${pyannote_onset} \
@@ -199,6 +214,23 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
        echo "PyAnnote SAD: ${sad_lines} segments"
        if [ "$sad_lines" -eq 0 ]; then
            echo "$0: pyannote_sad is empty. Check model / HF_TOKEN / wav.scp."
+           exit 1
+       fi
+    fi
+
+    if [[ "x${sad_type}" == "xfunasr_fsmn" ]]; then
+       echo "Running FunASR FSMN-VAD (hub=${funasr_hub}, device=${funasr_device}, nj=${funasr_nj}) ..."
+       "${PYTHON}" wespeaker/diar/make_funasr_fsmn_sad.py \
+               --scp "${wav_scp}" \
+               --min-duration $min_duration \
+               --hub "${funasr_hub}" \
+               --model-revision "${funasr_revision}" \
+               --device "${funasr_device}" \
+               --nj "${funasr_nj}" > "data/${partition}/funasr_fsmn_sad" || exit 1
+       sad_lines=$(wc -l < "data/${partition}/funasr_fsmn_sad")
+       echo "FunASR FSMN SAD: ${sad_lines} segments"
+       if [ "$sad_lines" -eq 0 ]; then
+           echo "$0: funasr_fsmn_sad is empty. Check funasr install (WeSpeaker .venv) and wav.scp."
            exit 1
        fi
     fi
@@ -258,28 +290,28 @@ if [ ${stage} -le 7 ] && [ ${stop_stage} -ge 7 ]; then
         mkdir -p exp/umap_cluster exp/ahc_cluster exp/spectral_cluster exp/doverlap_cluster
 
         echo "  [1/3] UMAP+HDBSCAN (merge_cutoff=${merge_cutoff})"
-        python3 wespeaker/diar/umap_clusterer.py \
+        "${PYTHON}" wespeaker/diar/umap_clusterer.py \
                 --scp "${emb_scp}" \
                 --output exp/umap_cluster/${labels_suffix} \
                 --merge_cutoff ${merge_cutoff}
-        python3 wespeaker/diar/make_rttm.py \
+        "${PYTHON}" wespeaker/diar/make_rttm.py \
                 --labels exp/umap_cluster/${labels_suffix} \
                 --channel 1 > exp/umap_cluster/${rttm_suffix}
 
         echo "  [2/3] AHC (threshold=${ahc_threshold}, ${ahc_linkage})"
-        python3 wespeaker/diar/ahc_clusterer.py \
+        "${PYTHON}" wespeaker/diar/ahc_clusterer.py \
                 --scp "${emb_scp}" \
                 --output exp/ahc_cluster/${labels_suffix} \
                 --threshold ${ahc_threshold} --linkage ${ahc_linkage}
-        python3 wespeaker/diar/make_rttm.py \
+        "${PYTHON}" wespeaker/diar/make_rttm.py \
                 --labels exp/ahc_cluster/${labels_suffix} \
                 --channel 1 > exp/ahc_cluster/${rttm_suffix}
 
         echo "  [3/3] Spectral"
-        python3 wespeaker/diar/spectral_clusterer.py \
+        "${PYTHON}" wespeaker/diar/spectral_clusterer.py \
                 --scp "${emb_scp}" \
                 --output exp/spectral_cluster/${labels_suffix}
-        python3 wespeaker/diar/make_rttm.py \
+        "${PYTHON}" wespeaker/diar/make_rttm.py \
                 --labels exp/spectral_cluster/${labels_suffix} \
                 --channel 1 > exp/spectral_cluster/${rttm_suffix}
 
@@ -312,7 +344,7 @@ if [ ${stage} -le 7 ] && [ ${stop_stage} -ge 7 ]; then
         fi
 
         echo "${cluster_type} clustering ..."
-        python3 wespeaker/diar/${cluster_type}_clusterer.py \
+        "${PYTHON}" wespeaker/diar/${cluster_type}_clusterer.py \
                 --scp "${emb_scp}" \
                 --output exp/${cluster_type}_cluster/${labels_suffix} \
                 ${cluster_extra_args}
@@ -323,7 +355,7 @@ fi
 
 # Stage 8: Convert labels to RTTM (skipped for doverlap — already done above)
 if [ ${stage} -le 8 ] && [ ${stop_stage} -ge 8 ] && [ "$cluster_type" != "doverlap" ]; then
-    python3 wespeaker/diar/make_rttm.py \
+    "${PYTHON}" wespeaker/diar/make_rttm.py \
             --labels exp/${cluster_type}_cluster/${partition}_${sad_type}_sad_labels \
             --channel 1 > exp/${cluster_type}_cluster/${partition}_${sad_type}_sad_rttm
     stage_done 8 "RTTM generated"
@@ -336,7 +368,7 @@ if [ ${stage} -le 8 ] && [ ${stop_stage} -ge 8 ] && [ "$use_overlap" = true ]; t
     rttm_in="exp/${cluster_type}_cluster/${partition}_${sad_type}_sad_rttm"
     rttm_ovl="${rttm_in}_overlap"
     echo "Running overlap detection (device=${overlap_device}, nj=${overlap_nj}) ..."
-    python3 wespeaker/diar/overlap_detection.py \
+    "${PYTHON}" wespeaker/diar/overlap_detection.py \
             --rttm "${rttm_in}" \
             --scp-wav "${wav_scp}" \
             --scp-emb exp/${partition}_${sad_type}_sad_embedding/emb.scp \
