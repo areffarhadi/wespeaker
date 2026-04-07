@@ -77,6 +77,7 @@ Excerpt from `md-eval` (**speaker-type confusion matrices**) for the **dev** par
 Raw log fragment:
 
 ```
+**OVERALL SPEAKER DIARIZATION ERROR = 4.00%**
  Speaker type confusion matrix -- speaker weighted
   REF\SYS (count)      unknown               MISS
 unknown                 876 /  90.1%         96 /   9.9%
@@ -147,11 +148,7 @@ Percentages are **of scored speaker time**, from SCTK `md-eval`. **DER = MISS + 
 `md-eval` excerpt:
 
 ```
-SCORED SPEAKER TIME =  64525.34 secs (102.4 percent of scored speech)
-MISSED SPEAKER TIME =   1036.90 secs (  1.6 percent of scored speaker time)
-FALARM SPEAKER TIME =    422.97 secs (  0.7 percent of scored speaker time)
- SPEAKER ERROR TIME =   2081.23 secs (  3.2 percent of scored speaker time)
----------------------------------------------
+
  OVERALL SPEAKER DIARIZATION ERROR = 5.49 percent of scored speaker time  `(ALL)
 ---------------------------------------------
  Speaker type confusion matrix -- speaker weighted
@@ -171,11 +168,7 @@ unknown            63488.44 /  98.4%    1036.90 /   1.6%
 `md-eval` excerpt:
 
 ```
-SCORED SPEAKER TIME = 130954.32 secs (101.6 percent of scored speech)
-MISSED SPEAKER TIME =   3104.96 secs (  2.4 percent of scored speaker time)
-FALARM SPEAKER TIME =   2373.34 secs (  1.8 percent of scored speaker time)
- SPEAKER ERROR TIME =   3685.58 secs (  2.8 percent of scored speaker time)
----------------------------------------------
+
  OVERALL SPEAKER DIARIZATION ERROR = 7.00 percent of scored speaker time  `(ALL)
 ---------------------------------------------
  Speaker type confusion matrix -- speaker weighted
@@ -228,11 +221,7 @@ unknown            62540.53 /  96.9%    1984.81 /   3.1%
 `md-eval` excerpt:
 
 ```
-SCORED SPEAKER TIME = 130954.32 secs (101.6 percent of scored speech)
-MISSED SPEAKER TIME =   4396.34 secs (  3.4 percent of scored speaker time)
-FALARM SPEAKER TIME =   1398.96 secs (  1.1 percent of scored speaker time)
- SPEAKER ERROR TIME =   3111.79 secs (  2.4 percent of scored speaker time)
----------------------------------------------
+
  OVERALL SPEAKER DIARIZATION ERROR = 6.80 percent of scored speaker time  `(ALL)
 ---------------------------------------------
  Speaker type confusion matrix -- speaker weighted
