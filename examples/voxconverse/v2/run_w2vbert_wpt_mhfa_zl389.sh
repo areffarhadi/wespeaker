@@ -16,12 +16,13 @@
 # limitations under the License.
 #
 # -----------------------------------------------------------------------------
-# VoxConverse v2 — w2v-BERT-2.0 SV embeddings with the SAME options as run_updated.sh
-# (PyAnnote/Silero/oracle/FunASR FSMN VAD, optional Demucs, spectral/umap/ahc/doverlap, overlap pass).
-# Compare to: run_updated.sh (ResNet ONNX embeddings).
-# Simpler w2v-only recipe without DOVER-Lap/pyannote overlap extras: run_w2vbert_org.sh
+# VoxConverse v2 — WPT + w2v-BERT-2.0 + MHFA embeddings (USM_FTcode zl389 recipe)
 #
-# Outputs use *_w2vbert suffixes so ResNet and w2v-BERT runs do not overwrite each other.
+# Same pipeline options as run_w2vbert.sh / run_updated.sh (VAD, clustering, DER).
+# Stage 6: model code is vendored in ./wpt_mhfa_zl389/ (main_train + losses only).
+# Checkpoints stay OUTSIDE the wespeaker repo (default: USM_FTcode ckpt_asv/...; override WPT_MHFA_CKPT_DIR).
+#
+# Outputs use *_w2vbert_wptmhfa_zl389 so they do not clash with run_w2vbert.sh.
 # -----------------------------------------------------------------------------
 
 . ./path.sh || exit 1
@@ -35,9 +36,9 @@ else
     PYTHON="${PYTHON:-python3}"
 fi
 
-stage=7
+stage=6
 stop_stage=9
-partition="dev"   # test / dev
+partition="test"   # test / dev
 subseg_cmn=true
 get_each_file_res=1
 skip_download_if_present=true
@@ -58,10 +59,16 @@ use_demucs=false
 demucs_device="${DEMUCS_DEVICE:-cuda}"
 demucs_model="${DEMUCS_MODEL:-htdemucs}"
 
-# ── w2v-BERT (same as run_w2vbert_org.sh) ───────────────────────────
-HF_MODELS="${HF_MODELS:-$HOME/Encode-explore/USM_FTcode/hf_models}"
-w2vbert_repo="${W2VBERT_REPO:-$HF_MODELS/w2v-BERT-2.0_SV}"
-checkpoint="${W2VBERT_CHECKPOINT:-$HF_MODELS/zl389_w2v-bert-2.0_SV/model_base_0.23.pth}"
+# ── WPT + MHFA + w2v-BERT (vendored under ./wpt_mhfa_zl389/) ──
+_v2_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+# Python import path (main_train_*.py + losses.py). Override only if you use an external copy.
+USM_FTCODE="${USM_FTCODE:-$_v2_dir/wpt_mhfa_zl389}"
+# Default training --out_fold (h8/c128/fixed24000 from train_simple_sv_wpt_w2vbert_mhfa_zl389.sh); not inside wespeaker.
+WPT_MHFA_CKPT_DIR="${WPT_MHFA_CKPT_DIR:-$HOME/Encode-explore/USM_FTcode/ckpt_asv/simple_sv_wpt_w2vbert_mhfa_zl389_h8_c128_fixed24000}"
+WPT_MHFA_CHECKPOINT_NAME="${WPT_MHFA_CHECKPOINT_NAME:-best_model.pt}"
+# Embedding extraction uses WeSpeaker PYTHON (above): it has kaldiio. USM enc-env often does not.
+# Set only if you need a different interpreter (install kaldiio there: pip install kaldiio).
+USM_WPT_MHFA_PYTHON="${USM_WPT_MHFA_PYTHON:-}"
 emb_batch_size=8
 emb_device="${W2VBERT_EMB_DEVICE:-cuda}"
 # Sliding window for sub-segments (must match run_updated.sh for fused_sim)
@@ -89,13 +96,13 @@ overlap_nj=16
 verbose=true
 bash_trace=false
 
-# Suffix for all w2v-BERT artifact names (labels/rttm/res)
-W2V="_w2vbert"
+# Suffix for all embedding artifact names (labels/rttm/res)
+W2V="_w2vbert_wptmhfa_zl389"
 
 help_message="Usage: $0 [options]
-VoxConverse v2 w2v-BERT pipeline — option-compatible with run_updated.sh (ResNet uses run_updated.sh).
+VoxConverse v2 — WPT+MHFA+w2v-BERT (USM_FTcode zl389 train recipe), same clustering/VAD as run_w2vbert.sh.
 
-Stages: 1=SCTK 2=data 3=Demucs 4=VAD 5=fbank 6=w2v-BERT 7=cluster 8=RTTM+overlap 9=DER
+Stages: 1=SCTK 2=data 3=Demucs 4=VAD 5=fbank 6=WPT+MHFA embeddings 7=cluster 8=RTTM+overlap 9=DER
 
   --sad_type system|pyannote|oracle|funasr_fsmn
   --cluster_type spectral|umap|ahc|doverlap
@@ -108,11 +115,12 @@ Stages: 1=SCTK 2=data 3=Demucs 4=VAD 5=fbank 6=w2v-BERT 7=cluster 8=RTTM+overlap
   --period_secs 0.75          sub-segment hop (seconds)
   --skip_download_if_present true|false  skip stages 1–2 when SCTK/data exist (default: true)
 
-Env: W2VBERT_REPO, W2VBERT_CHECKPOINT, HF_MODELS, W2VBERT_EMB_DEVICE, HF_TOKEN (PyAnnote),
-     DEMUCS_DEVICE, PYANNOTE_DEVICE, OVERLAP_DEVICE,
+Env: USM_FTCODE (default: ./wpt_mhfa_zl389 vendored code), WPT_MHFA_CKPT_DIR (default: \$HOME/Encode-explore/USM_FTcode/ckpt_asv/..._h8_c128_fixed24000),
+     WPT_MHFA_CHECKPOINT_NAME (default best_model.pt), USM_WPT_MHFA_PYTHON (optional; else PYTHON),
+     W2VBERT_EMB_DEVICE, HF_TOKEN (PyAnnote), DEMUCS_DEVICE, PYANNOTE_DEVICE, OVERLAP_DEVICE,
      FUNASR_HUB, FUNASR_REVISION, FUNASR_DEVICE, FUNASR_NJ (funasr_fsmn)
 
-Note: Stage 1 downloads SCTK only (no ResNet ONNX — not used for w2v-BERT)."
+Note: Stage 6 uses vendored model code; checkpoints are user-supplied (not zl389 model_base_*.pth)."
 
 . tools/parse_options.sh
 
@@ -120,7 +128,7 @@ if [ "$bash_trace" = true ]; then
     set -x
 fi
 
-log_file="run_w2vbert_$(date +%Y%m%d_%H%M%S).log"
+log_file="run_w2vbert_wpt_mhfa_zl389_$(date +%Y%m%d_%H%M%S).log"
 exec > >(tee -a "$log_file") 2>&1
 echo "Full log: $log_file"
 echo ""
@@ -144,7 +152,7 @@ stage_done() {
 print_summary() {
     echo ""
     echo "================================================================================"
-    echo "  PIPELINE SUMMARY (w2v-BERT, same options as run_updated.sh)"
+    echo "  PIPELINE SUMMARY (WPT+MHFA+w2v-BERT zl389, same options as run_updated.sh)"
     echo "================================================================================"
     for snum in $(printf '%s\n' "${!stage_status[@]}" | sort -n); do
         echo "  Stage ${snum}: ${stage_status[$snum]}"
@@ -325,25 +333,29 @@ if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
     stage_done 5 "Fbank done"
 fi
 
-# --- Stage 6: w2v-BERT embeddings ---
+# --- Stage 6: WPT + MHFA + w2v-BERT (USM_FTcode best_model.pt) ---
 if [ ${stage} -le 6 ] && [ ${stop_stage} -ge 6 ]; then
     resolve_wav_scp
-    stage_banner "Stage 6: w2v-BERT SV embeddings"
-    if [ ! -d "${w2vbert_repo}" ]; then
-        echo "$0: w2v-BERT repo not found: ${w2vbert_repo}" ; exit 1
+    stage_banner "Stage 6: WPT+MHFA+w2v-BERT embeddings (USM zl389 recipe)"
+    if [ ! -d "${USM_FTCODE}" ]; then
+        echo "$0: USM_FTCODE not found: ${USM_FTCODE}" ; exit 1
     fi
-    if [ ! -f "${checkpoint}" ]; then
-        echo "$0: checkpoint not found: ${checkpoint}" ; exit 1
+    if [ ! -f "${WPT_MHFA_CKPT_DIR}/args.json" ]; then
+        echo "$0: missing args.json under WPT_MHFA_CKPT_DIR=${WPT_MHFA_CKPT_DIR}" ; exit 1
+    fi
+    if [ ! -f "${WPT_MHFA_CKPT_DIR}/${WPT_MHFA_CHECKPOINT_NAME}" ]; then
+        echo "$0: missing checkpoint ${WPT_MHFA_CKPT_DIR}/${WPT_MHFA_CHECKPOINT_NAME}" ; exit 1
     fi
 
     emb_root="exp/${partition}_${sad_type}_sad_embedding${W2V}"
     [ -d "${emb_root}" ] && rm -r "${emb_root}"
 
-    bash local/extract_emb_w2vbert.sh \
+    bash local/extract_emb_w2vbert_wpt_mhfa_zl389.sh \
             --scp "${wav_scp}" \
             --segments data/${partition}/${sad_type}_sad \
-            --w2vbert-repo ${w2vbert_repo} \
-            --checkpoint ${checkpoint} \
+            --ckpt-dir "${WPT_MHFA_CKPT_DIR}" \
+            --checkpoint-name "${WPT_MHFA_CHECKPOINT_NAME}" \
+            --usm-ftcode "${USM_FTCODE}" \
             --device ${emb_device} \
             --store_dir "${emb_root}" \
             --batch_size ${emb_batch_size} \
@@ -359,7 +371,7 @@ if [ ${stage} -le 6 ] && [ ${stop_stage} -ge 6 ]; then
         echo "$0: ${emb_scp} missing or empty." ; exit 1
     fi
     emb_lines=$(wc -l < "${emb_scp}")
-    stage_done 6 "w2v-BERT embeddings (${emb_lines} lines, ${emb_device})"
+    stage_done 6 "WPT+MHFA embeddings (${emb_lines} lines, ${emb_device})"
 fi
 
 # --- Stage 7: Clustering ---
@@ -480,7 +492,7 @@ if [ ${stage} -le 9 ] && [ ${stop_stage} -ge 9 ]; then
         echo "$0: missing refs under ${ref_dir}/${partition}/" ; exit 1
     fi
 
-    echo "Evaluating DER (w2v-BERT) ..."
+    echo "Evaluating DER (WPT+MHFA+w2v-BERT) ..."
     perl "${MD_EVAL}" \
          -c 0.25 \
          -r <(cat "${ref_dir}/${partition}"/*.rttm) \

@@ -33,6 +33,14 @@ partition="dev"         # dev/test
 subseg_cmn=true
 get_each_file_res=1
 
+# Skip wget/unzip when SCTK, ONNX, and VoxConverse tree already exist (saves time/bandwidth).
+skip_download_if_present=true
+
+# ── ResNet embedding sliding window (must match w2v-BERT for fused_sim) ─
+frame_shift=10          # ms; must match make_fbank / extract_emb
+window_secs=1.5
+period_secs=0.75
+
 # ── VAD ──────────────────────────────────────────────────────────────
 sad_type="funasr_fsmn"       # oracle / system (Silero) / pyannote / funasr_fsmn
 # PyAnnote VAD settings (only when sad_type=pyannote)
@@ -80,7 +88,11 @@ Stages: 1=SCTK+ResNet 2=data 3=Demucs 4=VAD 5=fbank 6=embed 7=cluster 8=RTTM 9=D
   --sad_type system|pyannote|oracle|funasr_fsmn   VAD backend
   --cluster_type spectral|umap|ahc|doverlap  (default: doverlap)
   --use_demucs true|false     Demucs vocals before VAD (default: false)
-  --use_overlap true|false    PyAnnote overlap detection (default: false)"
+  --use_overlap true|false    PyAnnote overlap detection (default: false)
+  --frame_shift 10            fbank / embed frame shift (ms)
+  --window_secs 1.5           ResNet sub-segment window (seconds)
+  --period_secs 0.75          ResNet sub-segment hop (seconds)
+  --skip_download_if_present true|false  skip stages 1–2 downloads when files exist (default: true)"
 
 # Extract .zip with Python stdlib (no system `unzip` required — see local/extract_zip.py)
 extract_zip() {
@@ -131,32 +143,53 @@ print_summary() {
 
 # Stage 1: Prerequisites (SCTK + ResNet ONNX)
 if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
-    mkdir -p external_tools
-    wget -c https://github.com/usnistgov/SCTK/archive/refs/tags/v2.4.12.zip -O external_tools/SCTK-v2.4.12.zip
-    extract_zip external_tools/SCTK-v2.4.12.zip external_tools
+    if [ "${skip_download_if_present}" = true ] \
+            && [ -f external_tools/SCTK-2.4.12/src/md-eval/md-eval.pl ] \
+            && [ -f pretrained_models/voxceleb_resnet34_LM.onnx ]; then
+        echo "$0: Stage 1: SCTK + ResNet ONNX already present (skip_download_if_present=true)."
+        stage_done 1 "SCTK + ResNet34 ONNX (existing)"
+    else
+        mkdir -p external_tools
+        wget -c https://github.com/usnistgov/SCTK/archive/refs/tags/v2.4.12.zip -O external_tools/SCTK-v2.4.12.zip
+        extract_zip external_tools/SCTK-v2.4.12.zip external_tools
 
-    mkdir -p pretrained_models
-    wget -c https://wespeaker-1256283475.cos.ap-shanghai.myqcloud.com/models/voxceleb/voxceleb_resnet34_LM.onnx -O pretrained_models/voxceleb_resnet34_LM.onnx
-    stage_done 1 "SCTK + ResNet34 ONNX ready"
+        mkdir -p pretrained_models
+        wget -c https://wespeaker-1256283475.cos.ap-shanghai.myqcloud.com/models/voxceleb/voxceleb_resnet34_LM.onnx -O pretrained_models/voxceleb_resnet34_LM.onnx
+        stage_done 1 "SCTK + ResNet34 ONNX ready"
+    fi
 fi
 
 
 # Stage 2: Download VoxConverse data
 if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
-    mkdir -p data
-    wget -c https://github.com/joonson/voxconverse/archive/refs/heads/master.zip -O data/voxconverse_master.zip
-    extract_zip data/voxconverse_master.zip data
+    if [ "${skip_download_if_present}" = true ] \
+            && [ -d data/voxconverse-master ] \
+            && compgen -G "data/dev/audio/*.wav" > /dev/null \
+            && compgen -G "data/test/voxconverse_test_wav/*.wav" > /dev/null; then
+        echo "$0: Stage 2: VoxConverse audio + refs already on disk (skip_download_if_present=true)."
+        if [ ! -s data/dev/wav.scp ]; then
+            ls `pwd`/data/dev/audio/*.wav | awk -F/ '{print substr($NF, 1, length($NF)-4), $0}' > data/dev/wav.scp
+        fi
+        if [ ! -s data/test/wav.scp ]; then
+            ls `pwd`/data/test/voxconverse_test_wav/*.wav | awk -F/ '{print substr($NF, 1, length($NF)-4), $0}' > data/test/wav.scp
+        fi
+        stage_done 2 "VoxConverse data (existing)"
+    else
+        mkdir -p data
+        wget -c https://github.com/joonson/voxconverse/archive/refs/heads/master.zip -O data/voxconverse_master.zip
+        extract_zip data/voxconverse_master.zip data
 
-    mkdir -p data/dev
-    wget --no-check-certificate -c https://www.robots.ox.ac.uk/~vgg/data/voxconverse/data/voxconverse_dev_wav.zip -O data/voxconverse_dev_wav.zip
-    extract_zip data/voxconverse_dev_wav.zip data/dev
-    ls `pwd`/data/dev/audio/*.wav | awk -F/ '{print substr($NF, 1, length($NF)-4), $0}' > data/dev/wav.scp
+        mkdir -p data/dev
+        wget --no-check-certificate -c https://www.robots.ox.ac.uk/~vgg/data/voxconverse/data/voxconverse_dev_wav.zip -O data/voxconverse_dev_wav.zip
+        extract_zip data/voxconverse_dev_wav.zip data/dev
+        ls `pwd`/data/dev/audio/*.wav | awk -F/ '{print substr($NF, 1, length($NF)-4), $0}' > data/dev/wav.scp
 
-    mkdir -p data/test
-    wget  --no-check-certificate -c https://www.robots.ox.ac.uk/~vgg/data/voxconverse/data/voxconverse_test_wav.zip -O data/voxconverse_test_wav.zip
-    extract_zip data/voxconverse_test_wav.zip data/test
-    ls `pwd`/data/test/voxconverse_test_wav/*.wav | awk -F/ '{print substr($NF, 1, length($NF)-4), $0}' > data/test/wav.scp
-    stage_done 2 "VoxConverse data ready"
+        mkdir -p data/test
+        wget  --no-check-certificate -c https://www.robots.ox.ac.uk/~vgg/data/voxconverse/data/voxconverse_test_wav.zip -O data/voxconverse_test_wav.zip
+        extract_zip data/voxconverse_test_wav.zip data/test
+        ls `pwd`/data/test/voxconverse_test_wav/*.wav | awk -F/ '{print substr($NF, 1, length($NF)-4), $0}' > data/test/wav.scp
+        stage_done 2 "VoxConverse data ready"
+    fi
 fi
 
 
@@ -267,9 +300,9 @@ if [ ${stage} -le 6 ] && [ ${stop_stage} -ge 6 ]; then
             --device cuda \
             --store_dir exp/${partition}_${sad_type}_sad_embedding \
             --batch_size 96 \
-            --frame_shift 10 \
-            --window_secs 1 \
-            --period_secs 0.5 \
+            --frame_shift ${frame_shift} \
+            --window_secs ${window_secs} \
+            --period_secs ${period_secs} \
             --subseg_cmn ${subseg_cmn} \
             --verbose true \
             --nj 1 || exit 1

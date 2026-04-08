@@ -126,8 +126,18 @@ def get_args():
         default=10,
         help="frame shift in ms (must match make_fbank / extract_emb)",
     )
-    parser.add_argument("--window-secs", type=float, default=1.50, help="sub-segment window (seconds)")
-    parser.add_argument("--period-secs", type=float, default=0.75, help="sub-segment hop (seconds)")
+    parser.add_argument(
+        "--window-secs",
+        type=float,
+        default=1.5,
+        help="sub-segment window (seconds); match run_updated.sh extract_emb / ResNet for fusion",
+    )
+    parser.add_argument(
+        "--period-secs",
+        type=float,
+        default=0.75,
+        help="sub-segment hop (seconds); match run_updated.sh extract_emb / ResNet for fusion",
+    )
     parser.add_argument(
         "--subseg-cmn",
         default=True,

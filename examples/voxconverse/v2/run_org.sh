@@ -35,6 +35,10 @@ use_demucs=false
 demucs_device="${DEMUCS_DEVICE:-cuda}"
 demucs_model="${DEMUCS_MODEL:-htdemucs}"
 
+frame_shift=10
+window_secs=1.5
+period_secs=0.75
+
 help_message="Usage: $0 [options]
 Stages: 1=SCTK+ResNet 2=data 3=Demucs (optional) 4=VAD 5=fbank 6=embed 7=cluster 8=RTTM 9=DER
   --use_demucs true|false   Run Demucs vocals before VAD (default: false). Needs: pip install demucs
@@ -224,9 +228,9 @@ if [ ${stage} -le 6 ] && [ ${stop_stage} -ge 6 ]; then
             --device cuda \
             --store_dir exp/${partition}_${sad_type}_sad_embedding \
             --batch_size 96 \
-            --frame_shift 10 \
-            --window_secs 1 \
-            --period_secs 0.5 \
+            --frame_shift ${frame_shift} \
+            --window_secs ${window_secs} \
+            --period_secs ${period_secs} \
             --subseg_cmn ${subseg_cmn} \
             --verbose true \
             --nj 1 || exit 1

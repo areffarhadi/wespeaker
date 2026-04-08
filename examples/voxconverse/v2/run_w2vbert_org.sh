@@ -55,6 +55,9 @@ checkpoint="${W2VBERT_CHECKPOINT:-$HF_MODELS/zl389_w2v-bert-2.0_SV/model_base_0.
 
 emb_batch_size=8
 emb_device="${W2VBERT_EMB_DEVICE:-cuda}"
+frame_shift=10
+window_secs=1.5
+period_secs=0.75
 
 # Show Python progress on the terminal (tee) instead of hiding it in log/*.log only.
 verbose=true
@@ -282,9 +285,9 @@ if [ ${stage} -le 6 ] && [ ${stop_stage} -ge 6 ]; then
             --device ${emb_device} \
             --store_dir exp/${partition}_${sad_type}_sad_embedding_w2vbert \
             --batch_size ${emb_batch_size} \
-            --frame_shift 10 \
-            --window_secs 1.5 \
-            --period_secs 0.75 \
+            --frame_shift ${frame_shift} \
+            --window_secs ${window_secs} \
+            --period_secs ${period_secs} \
             --subseg_cmn ${subseg_cmn} \
             --verbose ${verbose} \
             --nj 1 || exit 1

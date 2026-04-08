@@ -28,6 +28,7 @@ verbose=false
 
 batch_size=8
 frame_shift=10
+# Match run_updated.sh extract_emb defaults (1.5 s / 0.75 s @ 10 ms shift)
 window_secs=1.5
 period_secs=0.75
 

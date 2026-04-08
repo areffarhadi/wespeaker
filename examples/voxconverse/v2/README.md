@@ -18,6 +18,7 @@ Rows with **—** in MISS/FA/SC are reserved for you to fill after a full `md-ev
 | Ours (w2v-BERT + DOVER-Lap + overlap, `run_w2vbert.sh`) | 1.6 | 0.7 | 3.2 | 5.49 |
 | Ours (w2v-BERT + DOVER-Lap, no overlap, `run_w2vbert.sh`) | 3.1 | 0.3 | 2.5 | 5.88 |
 | Ours (w2v-BERT + UMAP, FunASR FSMN-VAD, `run_w2vbert.sh`) | 2.8 | 0.5 | 2.69 | 5.99 |
+| Ours (WPT+MHFA w2v-BERT + UMAP, FunASR FSMN-VAD, `run_w2vbert_wpt_mhfa_zl389.sh`) | 2.8 | 0.5 | 1.55 | 4.85 |
 | DIHARD 2019 baseline [^1] | 11.1 | 1.4 | 11.3 | 23.8 |
 | DIHARD 2019 baseline w/ SE [^1] | 9.3 | 1.3 | 9.7 | 20.2 |
 | (SyncNet ASD only) [^1] | 2.2 | 4.1 | 4.0 | 10.4 |
@@ -38,6 +39,7 @@ Rows with **—** in MISS/FA/SC are reserved for you to fill after a full `md-ev
 | Ours (w2v-BERT + DOVER-Lap + overlap, `run_w2vbert.sh`) | 2.4 | 1.8 | 2.8 | 7.00 |
 | Ours (w2v-BERT + DOVER-Lap, no overlap, `run_w2vbert.sh`) | 3.4 | 1.1 | 2.4 | 6.80 |
 | Ours (w2v-BERT + UMAP, FunASR FSMN-VAD, `run_w2vbert.sh`) | 2.8 | 1.1 | 2.40 | 6.30 |
+| Ours (WPT+MHFA w2v-BERT + UMAP, FunASR FSMN-VAD, `run_w2vbert_wpt_mhfa_zl389.sh`) | 2.8 | 1.1 | 1.58 | 5.48 |
 
 ---
 
@@ -419,6 +421,89 @@ unknown                1275 /  84.8%        228 /  15.2%
   REF\SYS (seconds)    unknown               MISS
 unknown           127239.99 /  97.2%    3714.33 /   2.8%
   FALSE ALARM       1472.62 /   1.1%
+```
+
+### WPT+MHFA w2v-BERT + FunASR FSMN-VAD + UMAP (`run_w2vbert_wpt_mhfa_zl389.sh`)
+
+[`run_w2vbert_wpt_mhfa_zl389.sh`](run_w2vbert_wpt_mhfa_zl389.sh) with **FunASR FSMN-VAD** and **UMAP+HDBSCAN** (same recipe options as `run_w2vbert.sh`, but embeddings from the USM **WPT + w2v-BERT-2.0 + MHFA** checkpoint). Examples:
+
+```bash
+# Optional: export WPT_MHFA_CKPT_DIR=/path/to/your_out_fold  (default matches train_simple_sv_wpt_w2vbert_mhfa_zl389.sh out_fold under Encode-explore/USM_FTcode)
+./run_w2vbert_wpt_mhfa_zl389.sh --sad_type funasr_fsmn --cluster_type umap --partition dev --stage 4 --stop_stage 9
+./run_w2vbert_wpt_mhfa_zl389.sh --sad_type funasr_fsmn --cluster_type umap --partition test --stage 4 --stop_stage 9
+```
+
+Model code is vendored under `wpt_mhfa_zl389/`; **weights stay outside the wespeaker repo** (default `WPT_MHFA_CKPT_DIR` is `$HOME/Encode-explore/USM_FTcode/ckpt_asv/simple_sv_wpt_w2vbert_mhfa_zl389_h8_c128_fixed24000`). Override `WPT_MHFA_CKPT_DIR` if your `--out_fold` differs. Optional: `USM_FTCODE` for a non-vendored copy of the Python modules. **MISS** / **FA** from the **time-weighted** matrix; **SC = DER − MISS − FA**.
+
+| Partition | MISS | FA | SC | DER |
+|:---|:---:|:---:|:---:|:---:|
+| dev | 2.8 | 0.5 | 1.55 | 4.85 |
+| test | 2.8 | 1.1 | 1.58 | 5.48 |
+
+#### Dev (`--partition dev`)
+
+##### Speaker weighted (counts)
+
+| REF \ SYS | unknown | MISS |
+|:---|:---:|:---:|
+| unknown | 875 / 90.0% | 97 / 10.0% |
+| FALSE ALARM | 22 / 2.3% | — |
+
+##### Time weighted (seconds)
+
+| REF \ SYS | unknown | MISS |
+|:---|:---:|:---:|
+| unknown | 62700.73 / 97.2% | 1824.60 / 2.8% |
+| FALSE ALARM | 347.18 / 0.5% | — |
+
+Raw log fragment:
+
+```
+ OVERALL SPEAKER DIARIZATION ERROR = 4.85 percent of scored speaker time  `(ALL)
+---------------------------------------------
+ Speaker type confusion matrix -- speaker weighted
+  REF\SYS (count)      unknown               MISS
+unknown                 875 /  90.0%         97 /  10.0%
+  FALSE ALARM            22 /   2.3%
+---------------------------------------------
+ Speaker type confusion matrix -- time weighted
+  REF\SYS (seconds)    unknown               MISS
+unknown            62700.73 /  97.2%    1824.60 /   2.8%
+  FALSE ALARM        347.18 /   0.5%
+---------------------------------------------
+```
+
+#### Test (`--partition test`)
+
+##### Speaker weighted (counts)
+
+| REF \ SYS | unknown | MISS |
+|:---|:---:|:---:|
+| unknown | 1267 / 84.3% | 236 / 15.7% |
+| FALSE ALARM | 46 / 3.1% | — |
+
+##### Time weighted (seconds)
+
+| REF \ SYS | unknown | MISS |
+|:---|:---:|:---:|
+| unknown | 127239.99 / 97.2% | 3714.33 / 2.8% |
+| FALSE ALARM | 1472.62 / 1.1% | — |
+
+Raw log fragment:
+
+```
+OVERALL SPEAKER DIARIZATION ERROR = 5.48 percent of scored speaker time  `(ALL)
+---------------------------------------------
+ Speaker type confusion matrix -- speaker weighted
+  REF\SYS (count)      unknown               MISS
+unknown                1267 /  84.3%        236 /  15.7%
+  FALSE ALARM            46 /   3.1%
+---------------------------------------------
+ Speaker type confusion matrix -- time weighted
+  REF\SYS (seconds)    unknown               MISS
+unknown           127239.99 /  97.2%    3714.33 /   2.8%
+  FALSE ALARM       1472.62 /   1.1%
+---------------------------------------------
 ```
 
 ### Running `run_w2vbert.sh` (w2v-BERT diarization)
