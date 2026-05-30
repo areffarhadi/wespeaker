@@ -1,0 +1,7 @@
+wespeaker.diar.ahc\_clusterer module
+====================================
+
+.. automodule:: wespeaker.diar.ahc_clusterer
+   :members:
+   :undoc-members:
+   :show-inheritance:

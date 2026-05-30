@@ -1,0 +1,7 @@
+wespeaker.diar.wav\_channel module
+==================================
+
+.. automodule:: wespeaker.diar.wav_channel
+   :members:
+   :undoc-members:
+   :show-inheritance:

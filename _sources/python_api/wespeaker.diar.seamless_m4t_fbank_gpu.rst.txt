@@ -1,0 +1,7 @@
+wespeaker.diar.seamless\_m4t\_fbank\_gpu module
+===============================================
+
+.. automodule:: wespeaker.diar.seamless_m4t_fbank_gpu
+   :members:
+   :undoc-members:
+   :show-inheritance:

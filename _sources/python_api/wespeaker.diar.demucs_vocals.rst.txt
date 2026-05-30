@@ -1,0 +1,7 @@
+wespeaker.diar.demucs\_vocals module
+====================================
+
+.. automodule:: wespeaker.diar.demucs_vocals
+   :members:
+   :undoc-members:
+   :show-inheritance:

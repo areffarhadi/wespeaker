@@ -1,0 +1,7 @@
+wespeaker.diar.vbx\_clusterer module
+====================================
+
+.. automodule:: wespeaker.diar.vbx_clusterer
+   :members:
+   :undoc-members:
+   :show-inheritance:

@@ -1,0 +1,7 @@
+wespeaker.diar.ts\_vad module
+=============================
+
+.. automodule:: wespeaker.diar.ts_vad
+   :members:
+   :undoc-members:
+   :show-inheritance:

@@ -1,0 +1,35 @@
+wespeaker.diar package
+======================
+
+.. automodule:: wespeaker.diar
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 2
+
+   wespeaker.diar.ahc_clusterer
+   wespeaker.diar.demucs_vocals
+   wespeaker.diar.extract_emb
+   wespeaker.diar.extract_emb_w2vbert
+   wespeaker.diar.extract_emb_w2vbert_wpt_mhfa_zl389
+   wespeaker.diar.extract_emb_w2vbert_wpt_zl389_adapter
+   wespeaker.diar.fuse_rttm_doverlap
+   wespeaker.diar.fused_sim_clusterer
+   wespeaker.diar.make_fbank
+   wespeaker.diar.make_funasr_fsmn_sad
+   wespeaker.diar.make_oracle_sad
+   wespeaker.diar.make_pyannote_sad
+   wespeaker.diar.make_rttm
+   wespeaker.diar.make_system_sad
+   wespeaker.diar.overlap_detection
+   wespeaker.diar.seamless_m4t_fbank_gpu
+   wespeaker.diar.spectral_clusterer
+   wespeaker.diar.ts_vad
+   wespeaker.diar.umap_clusterer
+   wespeaker.diar.vbx_clusterer
+   wespeaker.diar.wav_channel

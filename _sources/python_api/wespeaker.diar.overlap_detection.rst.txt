@@ -1,0 +1,7 @@
+wespeaker.diar.overlap\_detection module
+========================================
+
+.. automodule:: wespeaker.diar.overlap_detection
+   :members:
+   :undoc-members:
+   :show-inheritance:

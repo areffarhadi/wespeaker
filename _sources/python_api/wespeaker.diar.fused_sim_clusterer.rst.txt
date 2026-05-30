@@ -1,0 +1,7 @@
+wespeaker.diar.fused\_sim\_clusterer module
+===========================================
+
+.. automodule:: wespeaker.diar.fused_sim_clusterer
+   :members:
+   :undoc-members:
+   :show-inheritance:

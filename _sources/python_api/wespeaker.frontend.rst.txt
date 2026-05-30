@@ -1,0 +1,16 @@
+wespeaker.frontend package
+==========================
+
+.. automodule:: wespeaker.frontend
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 2
+
+   wespeaker.frontend.s3prl
+   wespeaker.frontend.whisper_encoder

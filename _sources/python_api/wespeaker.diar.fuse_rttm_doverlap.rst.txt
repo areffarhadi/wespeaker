@@ -1,0 +1,7 @@
+wespeaker.diar.fuse\_rttm\_doverlap module
+==========================================
+
+.. automodule:: wespeaker.diar.fuse_rttm_doverlap
+   :members:
+   :undoc-members:
+   :show-inheritance:

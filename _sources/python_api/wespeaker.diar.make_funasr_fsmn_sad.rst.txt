@@ -1,0 +1,7 @@
+wespeaker.diar.make\_funasr\_fsmn\_sad module
+=============================================
+
+.. automodule:: wespeaker.diar.make_funasr_fsmn_sad
+   :members:
+   :undoc-members:
+   :show-inheritance:

@@ -1,0 +1,7 @@
+wespeaker.diar.make\_pyannote\_sad module
+=========================================
+
+.. automodule:: wespeaker.diar.make_pyannote_sad
+   :members:
+   :undoc-members:
+   :show-inheritance:
