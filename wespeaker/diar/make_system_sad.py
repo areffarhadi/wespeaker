@@ -25,7 +25,9 @@ import concurrent.futures
 import argparse
 
 import torch
+import torchaudio
 import silero_vad
+from wespeaker.diar.wav_channel import load_mono_1d
 from wespeaker.utils.file_utils import read_scp
 
 
@@ -47,9 +49,13 @@ def vad(utt_wav_pair,
         threshold=0.18):
     model = silero_vad.load_silero_vad()
 
-    utt, wav = utt_wav_pair
+    utt, wav_path = utt_wav_pair
 
-    wav = silero_vad.read_audio(wav, sampling_rate=sampling_rate)
+    wav, sr_in = load_mono_1d(wav_path)
+    if sr_in != sampling_rate:
+        wav = torchaudio.functional.resample(
+            wav.unsqueeze(0), sr_in, sampling_rate
+        ).squeeze(0)
     speech_timestamps = silero_vad.get_speech_timestamps(
         wav, model, sampling_rate=sampling_rate, threshold=threshold)
 

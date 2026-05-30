@@ -35,6 +35,14 @@ venv
 
 exp
 data
+# VoxConverse v2 recipe artifacts
+examples/voxconverse/v2/exp/
+examples/voxconverse/v2/data/
+examples/voxconverse/v2/pretrained_models/
+examples/voxconverse/v2/run_*.log
+examples/voxconverse/v2/poly-sim/
+examples/voxconverse/v2/MOST/
+examples/voxconverse/v2/**/__pycache__/
 raw_wav
 tensorboard
 **/*build*

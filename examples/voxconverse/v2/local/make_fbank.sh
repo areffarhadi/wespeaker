@@ -20,6 +20,7 @@ segments=''
 store_dir=''
 subseg_cmn=true
 nj=1
+verbose=false
 
 . tools/parse_options.sh
 
@@ -28,25 +29,78 @@ log_dir=$store_dir/log
 mkdir -p $split_dir
 mkdir -p $log_dir
 
-# split the scp file to sub_file, and we can use multi-process to extract Fbank feature
+# Split wav.scp into chunks. GNU split creates only as many files as needed (often < nj);
+# do NOT loop 0..nj-1 or workers hit missing split_scp_XXX and Python exits with FileNotFoundError.
 file_len=`wc -l $scp | awk '{print $1}'`
 subfile_len=$[$file_len / $nj + 1]
 prefix='split'
 split -l $subfile_len -d -a 3 $scp ${split_dir}/${prefix}_scp_
 
-for suffix in `seq 0 $[$nj-1]`;do
-    suffix=`printf '%03d' $suffix`
-    scp_subfile=${split_dir}/${prefix}_scp_${suffix}
+shopt -s nullglob
+split_files=( "${split_dir}/${prefix}_scp_"* )
+if [ ${#split_files[@]} -eq 0 ]; then
+    echo "$0: split produced no chunk files under ${split_dir} (is $scp empty?)" >&2
+    exit 1
+fi
+
+pids=()
+logfs=()
+idx=0
+for scp_subfile in "${split_files[@]}"; do
+    suffix=$(printf '%03d' $idx)
     write_ark=$store_dir/fbank_${suffix}.ark
-    python3 wespeaker/diar/make_fbank.py \
-            --scp ${scp_subfile} \
-            --segments ${segments} \
-            --ark-path ${write_ark} \
-            --subseg-cmn ${subseg_cmn} \
-            > ${log_dir}/${prefix}.${suffix}.log 2>&1 &
+    logf="${log_dir}/${prefix}.${suffix}.log"
+    if [ ! -s "$scp_subfile" ]; then
+        echo "$0: skip empty chunk: $scp_subfile" >&2
+        idx=$((idx + 1))
+        continue
+    fi
+    if [ "$verbose" = true ] && [ "$nj" -eq 1 ]; then
+        echo "$0: running make_fbank.py (verbose, nj=1) -> $logf" >&2
+        python3 wespeaker/diar/make_fbank.py \
+                --scp ${scp_subfile} \
+                --segments ${segments} \
+                --ark-path ${write_ark} \
+                --subseg-cmn ${subseg_cmn} \
+                2>&1 | tee "$logf" || exit 1
+    else
+        python3 wespeaker/diar/make_fbank.py \
+                --scp ${scp_subfile} \
+                --segments ${segments} \
+                --ark-path ${write_ark} \
+                --subseg-cmn ${subseg_cmn} \
+                > "$logf" 2>&1 &
+        pids+=($!)
+        logfs+=("$logf")
+    fi
+    idx=$((idx + 1))
 done
 
-wait
+if [ ${#pids[@]} -gt 0 ]; then
+    for i in "${!pids[@]}"; do
+        if ! wait "${pids[$i]}"; then
+            echo "$0: make_fbank.py failed (pid ${pids[$i]}). Log: ${logfs[$i]}" >&2
+            echo "----- tail ${logfs[$i]} -----" >&2
+            tail -n 80 "${logfs[$i]}" >&2
+            exit 1
+        fi
+    done
+fi
 
-cat $store_dir/fbank_*.scp > $store_dir/fbank.scp
-echo "Finish make Fbank."
+if [ "$verbose" = true ] && [ "$nj" -gt 1 ]; then
+    echo "----- $0: per-job logs (nj=$nj; use --nj 1 --verbose true for live tqdm on terminal) -----" >&2
+    for f in "${log_dir}/${prefix}".*.log; do
+        [ -f "$f" ] || continue
+        echo "===== $f =====" >&2
+        cat "$f" >&2
+    done
+fi
+
+shopt -s nullglob
+fbank_scps=( "${store_dir}"/fbank_*.scp )
+if [ ${#fbank_scps[@]} -eq 0 ]; then
+    echo "$0: no fbank_*.scp under ${store_dir}. Check ${log_dir}" >&2
+    exit 1
+fi
+cat "${fbank_scps[@]}" > "$store_dir/fbank.scp"
+echo "Finish make Fbank. ($(wc -l < "$store_dir/fbank.scp") lines in fbank.scp)"

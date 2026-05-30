@@ -1,5 +1,6 @@
 #!/bin/bash
 # Copyright (c) 2022 Zhengyang Chen (chenzhengyang117@gmail.com)
+#               2026 — w2v-BERT-2.0 SV variant (PyTorch checkpoint via infer_w2v_bert_sv_embedding.py)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,25 +17,32 @@
 . ./path.sh || exit 1
 
 scp=''
-pretrained_model=''
+segments=''
+w2vbert_repo=''
+checkpoint=''
 device=cuda
 store_dir=''
 subseg_cmn=true
 nj=1
 verbose=false
 
-batch_size=96
+batch_size=8
 frame_shift=10
+# Match run_updated.sh extract_emb defaults (1.5 s / 0.75 s @ 10 ms shift)
 window_secs=1.5
 period_secs=0.75
 
 . tools/parse_options.sh
+
+[ -z "${w2vbert_repo}" ] && echo "$0: set --w2vbert-repo to w2v-BERT-2.0_SV repo root" && exit 1
+[ -z "${checkpoint}" ] && echo "$0: set --checkpoint to model_base_*.pth" && exit 1
 
 split_dir=$store_dir/split_scp
 log_dir=$store_dir/log
 mkdir -p $split_dir
 mkdir -p $log_dir
 
+# Split wav.scp; GNU split creates only as many chunk files as needed (often < nj).
 file_len=`wc -l $scp | awk '{print $1}'`
 subfile_len=$[$file_len / $nj + 1]
 prefix='split'
@@ -59,11 +67,13 @@ for scp_subfile in "${split_files[@]}"; do
         continue
     fi
     if [ "$verbose" = true ] && [ "$nj" -eq 1 ]; then
-        echo "$0: running extract_emb.py (verbose, nj=1) -> $logf" >&2
-        python3 wespeaker/diar/extract_emb.py \
+        echo "$0: running extract_emb_w2vbert.py (verbose, nj=1) -> $logf" >&2
+        python3 wespeaker/diar/extract_emb_w2vbert.py \
                 --scp ${scp_subfile} \
+                --segments ${segments} \
                 --ark-path ${write_ark} \
-                --source ${pretrained_model} \
+                --w2vbert-repo ${w2vbert_repo} \
+                --checkpoint ${checkpoint} \
                 --device ${device} \
                 --batch-size ${batch_size} \
                 --frame-shift ${frame_shift} \
@@ -72,10 +82,12 @@ for scp_subfile in "${split_files[@]}"; do
                 --subseg-cmn ${subseg_cmn} \
                 2>&1 | tee "$logf" || exit 1
     else
-        python3 wespeaker/diar/extract_emb.py \
+        python3 wespeaker/diar/extract_emb_w2vbert.py \
                 --scp ${scp_subfile} \
+                --segments ${segments} \
                 --ark-path ${write_ark} \
-                --source ${pretrained_model} \
+                --w2vbert-repo ${w2vbert_repo} \
+                --checkpoint ${checkpoint} \
                 --device ${device} \
                 --batch-size ${batch_size} \
                 --frame-shift ${frame_shift} \
@@ -92,7 +104,7 @@ done
 if [ ${#pids[@]} -gt 0 ]; then
     for i in "${!pids[@]}"; do
         if ! wait "${pids[$i]}"; then
-            echo "$0: extract_emb.py failed (pid ${pids[$i]}). Log: ${logfs[$i]}" >&2
+            echo "$0: extract_emb_w2vbert.py failed (pid ${pids[$i]}). Log: ${logfs[$i]}" >&2
             echo "----- tail ${logfs[$i]} -----" >&2
             tail -n 80 "${logfs[$i]}" >&2
             exit 1
@@ -101,7 +113,7 @@ if [ ${#pids[@]} -gt 0 ]; then
 fi
 
 if [ "$verbose" = true ] && [ "$nj" -gt 1 ]; then
-    echo "----- $0: per-job logs (nj=$nj; use --nj 1 --verbose true for live output) -----" >&2
+    echo "----- $0: per-job logs (nj=$nj) -----" >&2
     for f in "${log_dir}/${prefix}".*.log; do
         [ -f "$f" ] || continue
         echo "===== $f =====" >&2
@@ -112,7 +124,7 @@ fi
 shopt -s nullglob
 emb_scps=( "${store_dir}"/emb_*.scp )
 if [ ${#emb_scps[@]} -eq 0 ]; then
-    echo "$0: no emb_*.scp under ${store_dir}. Check ${log_dir}" >&2
+    echo "$0: no emb_*.scp under ${store_dir} (Python jobs may have crashed). Check ${log_dir}" >&2
     exit 1
 fi
 cat "${emb_scps[@]}" > "$store_dir/emb.scp"
@@ -121,4 +133,4 @@ if [ "$emb_lines" -eq 0 ]; then
     echo "$0: emb.scp is empty after concat. Check ${log_dir}" >&2
     exit 1
 fi
-echo "Finish extract embedding. (${emb_lines} lines in emb.scp)"
+echo "Finish extract embedding (w2v-BERT-2.0 SV). (${emb_lines} lines in emb.scp)"

@@ -199,6 +199,35 @@ def get_args():
     parser.add_argument('--min_dist', required=False, default=0.05,
                         help="The minimum distance between points in "
                              "the low dimensional representation.")
+    parser.add_argument('--merge_cutoff', required=False, type=float,
+                        default=0.3,
+                        help="PAHC merge cutoff (normalised cosine "
+                             "similarity threshold). Tune on dev set; "
+                             "typical range 0.2–0.5. Default: 0.3")
+    parser.add_argument(
+        '--umap_n_components',
+        type=int,
+        default=-1,
+        help="UMAP output dim; -1 = min(32, N-2) per utterance (default).",
+    )
+    parser.add_argument(
+        '--hdbscan_min_cluster_size',
+        type=int,
+        default=4,
+        help="HDBSCAN min_cluster_size after UMAP (default: 4).",
+    )
+    parser.add_argument(
+        '--pahc_min_cluster_size',
+        type=int,
+        default=3,
+        help="PAHC post-process: clusters smaller than this may be absorbed (default: 3).",
+    )
+    parser.add_argument(
+        '--pahc_absorb_cutoff',
+        type=float,
+        default=0.0,
+        help="PAHC absorb threshold on normalised cosine (default: 0.0).",
+    )
     args = parser.parse_args()
     return args
 
@@ -221,12 +250,27 @@ def read_emb(scp):
     return subsegs_list, embeddings_list
 
 
-def cluster(embeddings, n_neighbors=16, min_dist=0.05):
+def cluster(
+    embeddings,
+    n_neighbors=16,
+    min_dist=0.05,
+    merge_cutoff=0.3,
+    umap_n_components=-1,
+    hdbscan_min_cluster_size=4,
+    pahc_min_cluster_size=3,
+    pahc_absorb_cutoff=0.0,
+):
     # Fallback
     if len(embeddings) <= 2:
         return [0] * len(embeddings)
 
-    umap_embeddings = umap.UMAP(n_components=min(32, len(embeddings) - 2),
+    n = len(embeddings)
+    if umap_n_components is None or int(umap_n_components) < 0:
+        n_comp = min(32, n - 2)
+    else:
+        n_comp = max(2, min(int(umap_n_components), n - 2))
+
+    umap_embeddings = umap.UMAP(n_components=n_comp,
                                 metric='cosine',
                                 n_neighbors=n_neighbors,
                                 min_dist=min_dist,
@@ -234,13 +278,13 @@ def cluster(embeddings, n_neighbors=16, min_dist=0.05):
                                 n_jobs=1).fit_transform(np.array(embeddings))
 
     labels = hdbscan.HDBSCAN(allow_single_cluster=True,
-                             min_cluster_size=4,
+                             min_cluster_size=hdbscan_min_cluster_size,
                              approx_min_span_tree=False,
                              core_dist_n_jobs=1).fit_predict(umap_embeddings)
 
-    labels = PAHC(merge_cutoff=0.3,
-                  min_cluster_size=3,
-                  absorb_cutoff=0.0).fit_predict(labels, embeddings)
+    labels = PAHC(merge_cutoff=merge_cutoff,
+                  min_cluster_size=pahc_min_cluster_size,
+                  absorb_cutoff=pahc_absorb_cutoff).fit_predict(labels, embeddings)
     return labels
 
 
@@ -252,10 +296,22 @@ if __name__ == '__main__':
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
 
     n_neighbors, min_dist = int(args.n_neighbors), float(args.min_dist)
+    merge_cutoff = float(args.merge_cutoff)
+    umap_n_components = int(args.umap_n_components)
+    hdbscan_min_cluster_size = int(args.hdbscan_min_cluster_size)
+    pahc_min_cluster_size = int(args.pahc_min_cluster_size)
+    pahc_absorb_cutoff = float(args.pahc_absorb_cutoff)
 
-    run_cluster = functools.partial(cluster,
-                                    n_neighbors=n_neighbors,
-                                    min_dist=min_dist)
+    run_cluster = functools.partial(
+        cluster,
+        n_neighbors=n_neighbors,
+        min_dist=min_dist,
+        merge_cutoff=merge_cutoff,
+        umap_n_components=umap_n_components,
+        hdbscan_min_cluster_size=hdbscan_min_cluster_size,
+        pahc_min_cluster_size=pahc_min_cluster_size,
+        pahc_absorb_cutoff=pahc_absorb_cutoff,
+    )
 
     with concurrent.futures.ProcessPoolExecutor() as executor:
         with open(args.output, 'w') as fd:

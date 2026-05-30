@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import os
+import sys
 import argparse
 import kaldiio
 from collections import OrderedDict
@@ -89,8 +90,16 @@ def extract_embeddings(fbanks, batch_size, session, subseg_cmn):
         fbanks_array = fbanks_array - np.mean(
             fbanks_array, axis=1, keepdims=True)
 
+    n_total = fbanks_array.shape[0]
+    n_batches = (n_total + batch_size - 1) // batch_size
+    print(f"ResNet ONNX embedding: {n_total} sub-segments, "
+          f"batch_size={batch_size}, {n_batches} batches",
+          file=sys.stderr)
+
     embeddings = []
-    for i in tqdm(range(0, fbanks_array.shape[0], batch_size)):
+    for i in tqdm(range(0, n_total, batch_size),
+                  total=n_batches, desc="embed", unit="batch",
+                  file=sys.stderr):
         batch_feats = fbanks_array[i:i + batch_size]
         batch_embs = session.run(input_feed={'feats': batch_feats},
                                  output_names=['embs'])[0].squeeze()
@@ -144,15 +153,20 @@ def main():
     period_fs = int(args.period_secs * 1000) // args.frame_shift
 
     session = init_session(args.source, args.device)
+    print(f"Reading fbank from {args.scp} ...", file=sys.stderr)
     fbank_dict = read_fbank(args.scp)
+    print(f"  -> {len(fbank_dict)} VAD segments", file=sys.stderr)
 
     subsegs, subseg_fbanks = [], []
-    for seg_id, fbank in fbank_dict.items():
+    for seg_id, fbank in tqdm(fbank_dict.items(), desc="subseg",
+                              unit="seg", file=sys.stderr):
         tmp_subsegs, tmp_subseg_fbanks = subsegment(fbank, seg_id, window_fs,
                                                     period_fs,
                                                     args.frame_shift)
         subsegs.extend(tmp_subsegs)
         subseg_fbanks.extend(tmp_subseg_fbanks)
+    print(f"  -> {len(subsegs)} sub-segments to embed", file=sys.stderr)
+
     embeddings = extract_embeddings(subseg_fbanks, args.batch_size, session,
                                     args.subseg_cmn)
 

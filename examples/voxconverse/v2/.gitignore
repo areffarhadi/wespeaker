@@ -1,0 +1,17 @@
+# Session logs (do not commit)
+run_*.log
+*.log
+
+# Pipeline outputs (also in repo-root .gitignore)
+exp/
+data/
+pretrained_models/
+external_tools/
+
+# Local eval artifacts
+poly-sim/
+MOST/
+
+# Python cache
+__pycache__/
+*.py[cod]
